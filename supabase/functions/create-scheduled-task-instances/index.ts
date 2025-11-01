@@ -83,7 +83,11 @@ serve(async (req) => {
           }
         }
 
-        // Create task instance
+        // Create task instance with time
+        const deadlineWithTime = task.default_time 
+          ? `${todayStr}T${task.default_time}:00`
+          : todayStr;
+
         const { error: insertError } = await supabaseAdmin
           .from('tasks')
           .insert({
@@ -91,7 +95,7 @@ serve(async (req) => {
             personnel_id: finalPersonnelId,
             author_id: task.created_by,
             description: task.description,
-            deadline: todayStr,
+            deadline: deadlineWithTime,
             status: 'open',
           });
 
