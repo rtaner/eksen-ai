@@ -154,7 +154,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <div className="text-gray-600">Yükleniyor...</div>
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
       </div>
     );
   }
@@ -210,6 +210,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
               <Link
                 key={item.href}
                 href={item.href}
+                prefetch={true}
                 className={`
                   flex items-center gap-3 px-4 py-3 rounded-lg transition-colors
                   min-h-[44px]
@@ -244,6 +245,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
               <Link
                 key={item.href}
                 href={item.href}
+                prefetch={true}
                 className={`
                   flex flex-col items-center justify-center py-2 px-3 min-h-[60px] flex-1
                   ${isActive ? 'text-blue-600' : 'text-gray-600'}
