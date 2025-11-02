@@ -49,10 +49,28 @@ export default function UserEditForm({ user, onSuccess, onCancel }: UserEditForm
 
       // Update password if provided
       if (formData.password.trim()) {
-        // Note: Supabase Auth password update requires admin privileges
-        // This should be done via an Edge Function with service role
-        // For now, we'll skip password update or implement it later
-        setError('Şifre güncelleme şu an desteklenmiyor. Lütfen kullanıcıdan şifresini sıfırlamasını isteyin.');
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) throw new Error('Oturum bulunamadı');
+
+        const response = await fetch(
+          `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/update-user-password`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${session.access_token}`,
+            },
+            body: JSON.stringify({
+              userId: user.id,
+              newPassword: formData.password.trim(),
+            }),
+          }
+        );
+
+        const result = await response.json();
+        if (!response.ok) {
+          throw new Error(result.error || 'Şifre güncellenirken bir hata oluştu');
+        }
       }
 
       onSuccess({
@@ -128,11 +146,12 @@ export default function UserEditForm({ user, onSuccess, onCancel }: UserEditForm
           value={formData.password}
           onChange={(e) => setFormData({ ...formData, password: e.target.value })}
           placeholder="Boş bırakırsanız şifre değişmez"
-          disabled={true}
+          disabled={isLoading}
+          minLength={6}
           className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100 disabled:cursor-not-allowed"
         />
         <p className="text-xs text-gray-500 mt-1">
-          Şifre güncelleme şu an desteklenmiyor
+          En az 6 karakter olmalıdır
         </p>
       </div>
 

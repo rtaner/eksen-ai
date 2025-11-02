@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import Link from 'next/link';
+import Image from 'next/image';
 import NotificationBell from '@/components/notifications/NotificationBell';
 
 interface NavItem {
@@ -163,8 +164,17 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
             <div className="flex items-center gap-4">
-              <Link href="/personnel" className="text-2xl font-bold" style={{ color: '#0B2A4C' }}>
-                Eksen AI
+              <Link href="/personnel" className="flex items-center gap-2">
+                <Image
+                  src="/icon-192x192.png"
+                  alt="Eksen AI"
+                  width={32}
+                  height={32}
+                  className="rounded-md"
+                />
+                <span className="hidden sm:block text-xl font-bold" style={{ color: '#0B2A4C' }}>
+                  Eksen AI
+                </span>
               </Link>
               {organizationName && (
                 <div className="hidden md:flex items-center gap-2">
