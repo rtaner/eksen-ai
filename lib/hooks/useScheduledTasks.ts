@@ -36,8 +36,35 @@ export function useScheduledTasks() {
   useEffect(() => {
     fetchTasks();
     
-    // Realtime subscription disabled due to connection issues
-    // Using optimistic updates instead
+    // Subscribe to real-time changes
+    const channel = supabase
+      .channel('scheduled_tasks_changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'scheduled_tasks',
+        },
+        (payload) => {
+          if (payload.eventType === 'INSERT') {
+            setTasks((prev) => [payload.new as ScheduledTask, ...prev]);
+          } else if (payload.eventType === 'UPDATE') {
+            setTasks((prev) =>
+              prev.map((task) =>
+                task.id === payload.new.id ? (payload.new as ScheduledTask) : task
+              )
+            );
+          } else if (payload.eventType === 'DELETE') {
+            setTasks((prev) => prev.filter((task) => task.id !== payload.old.id));
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   const createTask = async (input: CreateScheduledTaskInput): Promise<ScheduledTask | null> => {
@@ -67,7 +94,7 @@ export function useScheduledTasks() {
 
       if (insertError) throw insertError;
 
-      setTasks((prev) => [data, ...prev]);
+      // Real-time subscription will handle the update
       return data;
     } catch (err: any) {
       console.error('Error creating scheduled task:', err);
@@ -92,7 +119,7 @@ export function useScheduledTasks() {
 
       if (updateError) throw updateError;
 
-      setTasks((prev) => prev.map((task) => (task.id === id ? data : task)));
+      // Real-time subscription will handle the update
       return data;
     } catch (err: any) {
       console.error('Error updating scheduled task:', err);
@@ -112,7 +139,7 @@ export function useScheduledTasks() {
 
       if (deleteError) throw deleteError;
 
-      setTasks((prev) => prev.filter((task) => task.id !== id));
+      // Real-time subscription will handle the update
       return true;
     } catch (err: any) {
       console.error('Error deleting scheduled task:', err);
@@ -137,7 +164,7 @@ export function useScheduledTasks() {
 
       if (updateError) throw updateError;
 
-      setTasks((prev) => prev.map((t) => (t.id === id ? data : t)));
+      // Real-time subscription will handle the update
       return true;
     } catch (err: any) {
       console.error('Error toggling task status:', err);
