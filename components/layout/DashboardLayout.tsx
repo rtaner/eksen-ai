@@ -88,6 +88,12 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
 
   const handleLogout = async () => {
     try {
+      // Clear local state first
+      setUserRole(null);
+      setUserName('');
+      setOrganizationName('');
+      sessionStorage.removeItem('userProfile');
+
       // Sign out from Supabase
       const { error } = await supabase.auth.signOut();
       
@@ -97,17 +103,8 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         return;
       }
 
-      // Clear any local state and cache
-      setUserRole(null);
-      setUserName('');
-      setOrganizationName('');
-      sessionStorage.removeItem('userProfile');
-
-      // Redirect to login
-      router.push('/login');
-      
-      // Force refresh to clear any cached data
-      window.location.href = '/login';
+      // Use router.replace instead of window.location for smoother transition
+      router.replace('/login');
     } catch (error) {
       console.error('Logout error:', error);
       alert('Çıkış yapılırken bir hata oluştu');
