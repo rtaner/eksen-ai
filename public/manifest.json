@@ -7,6 +7,35 @@
   "background_color": "#ffffff",
   "theme_color": "#0B2A4C",
   "orientation": "portrait-primary",
-  "icons": [],
-  "categories": ["business", "productivity"]
+  "icons": [
+    {
+      "src": "/icon-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icon-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["business", "productivity"],
+  "shortcuts": [
+    {
+      "name": "Personel",
+      "short_name": "Personel",
+      "description": "Personel listesini görüntüle",
+      "url": "/personnel",
+      "icons": [{ "src": "/icon-192x192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "İşlerim",
+      "short_name": "İşlerim",
+      "description": "Görevlerimi görüntüle",
+      "url": "/my-tasks",
+      "icons": [{ "src": "/icon-192x192.png", "sizes": "192x192" }]
+    }
+  ]
 }
