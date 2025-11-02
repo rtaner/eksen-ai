@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import OneSignalProvider from "@/components/providers/OneSignalProvider";
+import ServiceWorkerProvider from "@/components/providers/ServiceWorkerProvider";
 
 export const metadata: Metadata = {
   title: "Eksen AI - Personel Geri Bildirim",
@@ -33,6 +34,7 @@ export default function RootLayout({
         <meta name="apple-mobile-web-app-status-bar-style" content="default" />
       </head>
       <body>
+        <ServiceWorkerProvider />
         <OneSignalProvider>{children}</OneSignalProvider>
       </body>
     </html>
