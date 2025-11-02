@@ -1,16 +1,31 @@
-// Service Worker for PWA Push Notifications
-const CACHE_NAME = 'vector-pwa-v1';
+// Service Worker for PWA and OneSignal
+const CACHE_NAME = 'eksen-ai-v1';
+
+// Import OneSignal Service Worker (if needed)
+// OneSignal will handle its own service worker registration
 
 // Install event
 self.addEventListener('install', (event) => {
-  console.log('Service Worker installing...');
+  console.log('[SW] Installing...');
   self.skipWaiting();
 });
 
 // Activate event
 self.addEventListener('activate', (event) => {
-  console.log('Service Worker activating...');
-  event.waitUntil(clients.claim());
+  console.log('[SW] Activating...');
+  event.waitUntil(
+    Promise.all([
+      clients.claim(),
+      // Clean old caches
+      caches.keys().then((cacheNames) => {
+        return Promise.all(
+          cacheNames
+            .filter((name) => name !== CACHE_NAME)
+            .map((name) => caches.delete(name))
+        );
+      }),
+    ])
+  );
 });
 
 // Push event - Handle incoming push notifications
