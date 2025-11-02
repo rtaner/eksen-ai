@@ -4,12 +4,22 @@ import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useNotifications } from '@/lib/hooks/useNotifications';
 import { timeAgo } from '@/lib/utils/date';
+import OneSignal from 'react-onesignal';
 
 export default function NotificationBell() {
   const [isOpen, setIsOpen] = useState(false);
+  const [permissionStatus, setPermissionStatus] = useState<'default' | 'granted' | 'denied'>('default');
+  const [isRequestingPermission, setIsRequestingPermission] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
   const { notifications, unreadCount, loading, markAsRead, markAllAsRead, clearAll } = useNotifications();
+
+  // Check notification permission status
+  useEffect(() => {
+    if (typeof window !== 'undefined' && 'Notification' in window) {
+      setPermissionStatus(Notification.permission as 'default' | 'granted' | 'denied');
+    }
+  }, []);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -31,6 +41,22 @@ export default function NotificationBell() {
       router.push(notification.link);
     }
     setIsOpen(false);
+  };
+
+  const requestNotificationPermission = async () => {
+    setIsRequestingPermission(true);
+    try {
+      await OneSignal.Notifications.requestPermission();
+      
+      // Update permission status
+      if (typeof window !== 'undefined' && 'Notification' in window) {
+        setPermissionStatus(Notification.permission as 'default' | 'granted' | 'denied');
+      }
+    } catch (error) {
+      console.error('Bildirim izni hatası:', error);
+    } finally {
+      setIsRequestingPermission(false);
+    }
   };
 
   const getNotificationIcon = (type: string) => {
@@ -81,6 +107,21 @@ export default function NotificationBell() {
           <div className="p-3 sm:p-4 border-b border-gray-200">
             <div className="flex items-center justify-between mb-2">
               <h3 className="font-semibold text-gray-900 text-sm sm:text-base">Bildirimler</h3>
+              
+              {/* Permission Button - Only show if not granted */}
+              {permissionStatus !== 'granted' && (
+                <button
+                  onClick={requestNotificationPermission}
+                  disabled={isRequestingPermission}
+                  className="flex items-center gap-1 px-2 py-1 text-xs font-medium text-white bg-blue-600 hover:bg-blue-700 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  title="Bildirim izni ver"
+                >
+                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+                  </svg>
+                  {isRequestingPermission ? '...' : 'İzin Ver'}
+                </button>
+              )}
             </div>
             {notifications.length > 0 && (
               <div className="flex gap-2">
