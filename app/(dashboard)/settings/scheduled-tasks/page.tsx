@@ -46,6 +46,8 @@ export default function ScheduledTasksPage() {
 
         {/* Tasks List */}
         <ScheduledTasksList
+          tasks={tasks}
+          loading={loading}
           onEdit={(task) => {
             setEditingTask(task);
             setIsModalOpen(true);

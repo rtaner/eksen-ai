@@ -1,11 +1,15 @@
 'use client';
 
-import { useScheduledTasks } from '@/lib/hooks/useScheduledTasks';
+import type { ScheduledTask } from '@/lib/types/scheduled-tasks';
 import ScheduledTaskCard from './ScheduledTaskCard';
 
-export default function ScheduledTasksList({ onEdit }: { onEdit: (task: any) => void }) {
-  const { tasks, loading } = useScheduledTasks();
+interface ScheduledTasksListProps {
+  tasks: ScheduledTask[];
+  loading: boolean;
+  onEdit: (task: any) => void;
+}
 
+export default function ScheduledTasksList({ tasks, loading, onEdit }: ScheduledTasksListProps) {
   if (loading) return <div className="text-center py-8">Yükleniyor...</div>;
   if (tasks.length === 0) return <div className="text-center py-8 text-gray-500">Henüz zamanlanmış görev yok</div>;
 
