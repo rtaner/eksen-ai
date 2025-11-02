@@ -9,6 +9,15 @@ const nextConfig = {
   async headers() {
     return [
       {
+        source: '/manifest.json',
+        headers: [
+          {
+            key: 'Content-Type',
+            value: 'application/manifest+json',
+          },
+        ],
+      },
+      {
         source: '/:path*',
         headers: [
           {
@@ -22,6 +31,7 @@ const nextConfig = {
               "font-src 'self' data:",
               "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.gemini.google.com https://onesignal.com https://*.onesignal.com",
               "worker-src 'self' blob:",
+              "manifest-src 'self'",
             ].join('; '),
           },
         ],
