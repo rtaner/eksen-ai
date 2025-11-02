@@ -44,16 +44,31 @@ export default function NotificationBell() {
   };
 
   const requestNotificationPermission = async () => {
+    if (typeof window === 'undefined' || !('Notification' in window)) {
+      alert('Tarayıcınız bildirimleri desteklemiyor');
+      return;
+    }
+
     setIsRequestingPermission(true);
+    
     try {
-      await OneSignal.Notifications.requestPermission();
+      // Use native Notification API first
+      const permission = await Notification.requestPermission();
+      setPermissionStatus(permission as 'default' | 'granted' | 'denied');
       
-      // Update permission status
-      if (typeof window !== 'undefined' && 'Notification' in window) {
-        setPermissionStatus(Notification.permission as 'default' | 'granted' | 'denied');
+      if (permission === 'granted') {
+        // Then initialize OneSignal subscription
+        try {
+          await OneSignal.User.PushSubscription.optIn();
+          console.log('OneSignal subscription successful');
+        } catch (oneSignalError) {
+          console.error('OneSignal subscription error:', oneSignalError);
+          // Don't fail if OneSignal has issues
+        }
       }
     } catch (error) {
       console.error('Bildirim izni hatası:', error);
+      alert('Bildirim izni alınamadı. Lütfen tarayıcı ayarlarınızı kontrol edin.');
     } finally {
       setIsRequestingPermission(false);
     }
