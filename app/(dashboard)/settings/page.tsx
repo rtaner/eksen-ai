@@ -5,6 +5,7 @@ import Link from 'next/link';
 import DashboardModals from '../../../components/dashboard/DashboardModals';
 import SettingsModals from '../../../components/settings/SettingsModals';
 import InviteCodeCard from '../../../components/settings/InviteCodeCard';
+import NotificationPermissionCard from '../../../components/settings/NotificationPermissionCard';
 
 export default async function SettingsPage() {
   const supabase = await createClient();
@@ -240,6 +241,9 @@ export default async function SettingsPage() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {/* 0. Bildirim İzni */}
+        <NotificationPermissionCard />
+
         {/* 1. Performans Özeti */}
         <DashboardModals
           item={dashboardItems[0]}
