@@ -1,8 +1,14 @@
 -- Enable pg_cron extension
 CREATE EXTENSION IF NOT EXISTS pg_cron;
 
--- Drop existing jobs if they exist
-SELECT cron.unschedule('create-scheduled-task-instances-daily');
+-- Drop existing job if it exists (ignore error if not found)
+DO $$
+BEGIN
+  PERFORM cron.unschedule('create-scheduled-task-instances-daily');
+EXCEPTION
+  WHEN OTHERS THEN
+    NULL; -- Ignore error if job doesn't exist
+END $$;
 
 -- Create daily job to create scheduled task instances
 -- Runs every day at 00:01 UTC (03:01 Turkey time)
