@@ -5,7 +5,6 @@ import OneSignalProvider from "@/components/providers/OneSignalProvider";
 export const metadata: Metadata = {
   title: "Eksen AI - Personel Geri Bildirim",
   description: "Yapay zeka destekli personel geri bildirim ve görev yönetimi",
-  manifest: "/manifest.json",
   themeColor: "#0B2A4C",
   appleWebApp: {
     capable: true,
@@ -28,6 +27,7 @@ export default function RootLayout({
   return (
     <html lang="tr">
       <head>
+        <link rel="manifest" href="/manifest.json" />
         <link rel="apple-touch-icon" href="/icon-192x192.png" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="default" />
