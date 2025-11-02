@@ -48,7 +48,6 @@ export function useScheduledTasks() {
           table: 'scheduled_tasks',
         },
         (payload) => {
-          console.log('Real-time INSERT:', payload);
           setTasks((prev) => [payload.new as ScheduledTask, ...prev]);
         }
       )
@@ -60,7 +59,6 @@ export function useScheduledTasks() {
           table: 'scheduled_tasks',
         },
         (payload) => {
-          console.log('Real-time UPDATE:', payload);
           setTasks((prev) =>
             prev.map((task) =>
               task.id === payload.new.id ? (payload.new as ScheduledTask) : task
@@ -76,16 +74,12 @@ export function useScheduledTasks() {
           table: 'scheduled_tasks',
         },
         (payload) => {
-          console.log('Real-time DELETE:', payload);
           setTasks((prev) => prev.filter((task) => task.id !== payload.old.id));
         }
       )
-      .subscribe((status) => {
-        console.log('Subscription status:', status);
-      });
+      .subscribe();
 
     return () => {
-      console.log('Unsubscribing from scheduled_tasks');
       supabase.removeChannel(channel);
     };
   }, []);
