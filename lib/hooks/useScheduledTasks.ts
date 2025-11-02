@@ -6,11 +6,12 @@ import type {
   UpdateScheduledTaskInput,
 } from '@/lib/types/scheduled-tasks';
 
+const supabase = createClient();
+
 export function useScheduledTasks() {
   const [tasks, setTasks] = useState<ScheduledTask[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const supabase = createClient();
 
   const fetchTasks = async () => {
     try {
@@ -42,27 +43,49 @@ export function useScheduledTasks() {
       .on(
         'postgres_changes',
         {
-          event: '*',
+          event: 'INSERT',
           schema: 'public',
           table: 'scheduled_tasks',
         },
         (payload) => {
-          if (payload.eventType === 'INSERT') {
-            setTasks((prev) => [payload.new as ScheduledTask, ...prev]);
-          } else if (payload.eventType === 'UPDATE') {
-            setTasks((prev) =>
-              prev.map((task) =>
-                task.id === payload.new.id ? (payload.new as ScheduledTask) : task
-              )
-            );
-          } else if (payload.eventType === 'DELETE') {
-            setTasks((prev) => prev.filter((task) => task.id !== payload.old.id));
-          }
+          console.log('Real-time INSERT:', payload);
+          setTasks((prev) => [payload.new as ScheduledTask, ...prev]);
         }
       )
-      .subscribe();
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'scheduled_tasks',
+        },
+        (payload) => {
+          console.log('Real-time UPDATE:', payload);
+          setTasks((prev) =>
+            prev.map((task) =>
+              task.id === payload.new.id ? (payload.new as ScheduledTask) : task
+            )
+          );
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'DELETE',
+          schema: 'public',
+          table: 'scheduled_tasks',
+        },
+        (payload) => {
+          console.log('Real-time DELETE:', payload);
+          setTasks((prev) => prev.filter((task) => task.id !== payload.old.id));
+        }
+      )
+      .subscribe((status) => {
+        console.log('Subscription status:', status);
+      });
 
     return () => {
+      console.log('Unsubscribing from scheduled_tasks');
       supabase.removeChannel(channel);
     };
   }, []);
