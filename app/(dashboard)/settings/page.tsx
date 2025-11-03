@@ -375,6 +375,42 @@ export default async function SettingsPage() {
         </Link>
         )}
 
+        {/* 6.5 Duplicate Personel (Owner/Manager) */}
+        <Link href="/settings/duplicates">
+          <Card hover className="h-full">
+            <div className="flex items-start gap-4">
+              <div className="flex-shrink-0 w-12 h-12 rounded-lg flex items-center justify-center bg-yellow-100 text-yellow-600">
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                </svg>
+              </div>
+              <div className="flex-1 min-w-0">
+                <h3 className="text-lg font-semibold text-gray-900 mb-1">
+                  Duplicate Personel
+                </h3>
+                <p className="text-sm text-gray-600">
+                  Duplicate personel kayıtlarını tespit edin ve birleştirin
+                </p>
+              </div>
+              <div className="flex-shrink-0">
+                <svg
+                  className="w-5 h-5 text-gray-400"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M9 5l7 7-7 7"
+                  />
+                </svg>
+              </div>
+            </div>
+          </Card>
+        </Link>
+
         {/* 7. Yetki Yönetimi (Owner only) */}
         {isOwner && (
         <Link href="/settings/permissions">

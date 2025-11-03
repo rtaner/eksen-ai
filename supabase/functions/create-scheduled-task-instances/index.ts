@@ -157,20 +157,23 @@ async function getAssignedPersonnel(supabase: any, task: any): Promise<any[]> {
     return data || [];
   } else if (task.assignment_type === 'role') {
     const role = task.assignment_config.role;
+    
+    // Get users with the specified role
     const { data: profiles } = await supabase
       .from('profiles')
-      .select('id, organization_id')
+      .select('id')
       .eq('organization_id', task.organization_id)
       .eq('role', role);
     
-    if (!profiles) return [];
+    if (!profiles || profiles.length === 0) return [];
     
-    // Get personnel records for these users
+    // Get personnel records for these users (user_id matches profile id)
+    const userIds = profiles.map((p: any) => p.id);
     const { data: personnel } = await supabase
       .from('personnel')
       .select('id')
-      .eq('organization_id', task.organization_id)
-      .contains('metadata', { role });
+      .in('user_id', userIds)
+      .eq('organization_id', task.organization_id);
     
     return personnel || [];
   }
