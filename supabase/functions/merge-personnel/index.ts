@@ -49,20 +49,34 @@ serve(async (req) => {
     const action = url.searchParams.get('action');
 
     if (action === 'detect') {
-      // Detect duplicates in profiles (users with accounts)
+      // Detect duplicates in both profiles and personnel tables
       const { data: profiles, error: profilesError } = await supabaseClient
         .from('profiles')
-        .select('id, name, surname, created_at')
+        .select('id, name, surname, created_at, email')
         .eq('organization_id', profile.organization_id)
         .order('created_at', { ascending: true });
 
       if (profilesError) throw profilesError;
 
+      const { data: personnel, error: personnelError } = await supabaseClient
+        .from('personnel')
+        .select('id, name, surname, created_at, email')
+        .eq('organization_id', profile.organization_id)
+        .order('created_at', { ascending: true });
+
+      if (personnelError) throw personnelError;
+
+      // Combine both lists
+      const allPeople = [
+        ...(profiles || []).map(p => ({ ...p, source: 'profile' })),
+        ...(personnel || []).map(p => ({ ...p, source: 'personnel' }))
+      ];
+
       const duplicates: any[] = [];
       const seen = new Map();
 
-      // First pass: identify duplicates
-      for (const person of profiles || []) {
+      // Identify duplicates by name+surname (case-insensitive)
+      for (const person of allPeople) {
         const key = `${person.name.toLowerCase().trim()}_${person.surname.toLowerCase().trim()}`;
         
         if (seen.has(key)) {
@@ -73,6 +87,8 @@ serve(async (req) => {
               id: existing.id,
               name: existing.name,
               surname: existing.surname,
+              email: existing.email,
+              user_id: existing.source === 'profile' ? existing.id : null,
               created_at: existing.created_at,
               notes_count: 0,
               tasks_count: 0,
@@ -81,6 +97,8 @@ serve(async (req) => {
               id: person.id,
               name: person.name,
               surname: person.surname,
+              email: person.email,
+              user_id: person.source === 'profile' ? person.id : null,
               created_at: person.created_at,
               notes_count: 0,
               tasks_count: 0,
@@ -107,18 +125,25 @@ serve(async (req) => {
         throw new Error('Missing primaryId or secondaryId');
       }
 
-      // Verify both records belong to the organization
-      const { data: records } = await supabaseClient
+      // Check if records are in profiles or personnel table
+      const { data: profileRecords } = await supabaseClient
         .from('profiles')
         .select('id, organization_id')
         .in('id', [primaryId, secondaryId]);
 
-      if (!records || records.length !== 2) {
-        throw new Error('Profile records not found');
+      const { data: personnelRecords } = await supabaseClient
+        .from('personnel')
+        .select('id, organization_id')
+        .in('id', [primaryId, secondaryId]);
+
+      const allRecords = [...(profileRecords || []), ...(personnelRecords || [])];
+
+      if (allRecords.length !== 2) {
+        throw new Error('Records not found');
       }
 
-      if (records.some(r => r.organization_id !== profile.organization_id)) {
-        throw new Error('Profile records do not belong to your organization');
+      if (allRecords.some(r => r.organization_id !== profile.organization_id)) {
+        throw new Error('Records do not belong to your organization');
       }
 
       // Move notes
@@ -149,13 +174,21 @@ serve(async (req) => {
         })
         .contains('personnel_ids', [secondaryId]);
 
-      // Delete secondary profile (this will cascade delete auth.users via ON DELETE CASCADE)
-      const { error: deleteError } = await supabaseClient
+      // Delete secondary record (try both tables)
+      const { error: deleteProfileError } = await supabaseClient
         .from('profiles')
         .delete()
         .eq('id', secondaryId);
 
-      if (deleteError) throw deleteError;
+      const { error: deletePersonnelError } = await supabaseClient
+        .from('personnel')
+        .delete()
+        .eq('id', secondaryId);
+
+      // At least one should succeed
+      if (deleteProfileError && deletePersonnelError) {
+        throw new Error('Failed to delete secondary record');
+      }
 
       return new Response(
         JSON.stringify({ 
