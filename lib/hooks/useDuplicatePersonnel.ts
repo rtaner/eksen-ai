@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { createClient } from '@/lib/supabase/client';
 
 interface PersonnelRecord {
@@ -25,7 +25,7 @@ export function useDuplicatePersonnel() {
   const [error, setError] = useState<string | null>(null);
   const supabase = createClient();
 
-  const detectDuplicates = async () => {
+  const detectDuplicates = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
@@ -43,17 +43,22 @@ export function useDuplicatePersonnel() {
         }
       );
 
-      const result = await response.json();
-      if (!response.ok) throw new Error(result.error);
+      if (!response.ok) {
+        const result = await response.json();
+        throw new Error(result.error || 'Duplicate detection failed');
+      }
 
+      const result = await response.json();
+      console.log('Duplicates detected:', result);
       setDuplicates(result.duplicates || []);
     } catch (err: any) {
       console.error('Error detecting duplicates:', err);
       setError(err.message || 'Duplicate kayıtlar tespit edilirken hata oluştu');
+      setDuplicates([]);
     } finally {
       setLoading(false);
     }
-  };
+  }, [supabase]);
 
   const mergePersonnel = async (primaryId: string, secondaryId: string): Promise<boolean> => {
     try {

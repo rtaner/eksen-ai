@@ -18,10 +18,10 @@ export default function DuplicatesPage() {
   }, [permissionsLoading, canEdit, router]);
 
   useEffect(() => {
-    if (canEdit('personnel')) {
+    if (canEdit('personnel') && !permissionsLoading) {
       detectDuplicates();
     }
-  }, [canEdit]);
+  }, [canEdit, permissionsLoading, detectDuplicates]);
 
   if (permissionsLoading || loading) {
     return (
