@@ -61,21 +61,12 @@ serve(async (req) => {
       const duplicates: any[] = [];
       const seen = new Map();
 
+      // First pass: identify duplicates
       for (const person of profiles || []) {
-        // Match by full name (name + surname)
         const key = `${person.name.toLowerCase().trim()}_${person.surname.toLowerCase().trim()}`;
         
         if (seen.has(key)) {
           const existing = seen.get(key);
-          
-          // Count related data (profiles use their id as personnel_id in tasks/notes)
-          const [notesCount1, tasksCount1, notesCount2, tasksCount2] = await Promise.all([
-            supabaseClient.from('notes').select('id', { count: 'exact', head: true }).eq('personnel_id', existing.id),
-            supabaseClient.from('tasks').select('id', { count: 'exact', head: true }).eq('personnel_id', existing.id),
-            supabaseClient.from('notes').select('id', { count: 'exact', head: true }).eq('personnel_id', person.id),
-            supabaseClient.from('tasks').select('id', { count: 'exact', head: true }).eq('personnel_id', person.id),
-          ]);
-
           duplicates.push({
             id: `${existing.id}_${person.id}`,
             record1: {
@@ -83,18 +74,18 @@ serve(async (req) => {
               name: existing.name,
               surname: existing.surname,
               created_at: existing.created_at,
-              notes_count: notesCount1.count || 0,
-              tasks_count: tasksCount1.count || 0,
+              notes_count: 0,
+              tasks_count: 0,
             },
             record2: {
               id: person.id,
               name: person.name,
               surname: person.surname,
               created_at: person.created_at,
-              notes_count: notesCount2.count || 0,
-              tasks_count: tasksCount2.count || 0,
+              notes_count: 0,
+              tasks_count: 0,
             },
-            suggested_primary: (notesCount1.count || 0) + (tasksCount1.count || 0) >= (notesCount2.count || 0) + (tasksCount2.count || 0) ? existing.id : person.id,
+            suggested_primary: existing.id, // Default to older record
           });
         } else {
           seen.set(key, person);
