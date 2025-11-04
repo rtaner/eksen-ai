@@ -386,10 +386,10 @@ export default async function SettingsPage() {
               </div>
               <div className="flex-1 min-w-0">
                 <h3 className="text-lg font-semibold text-gray-900 mb-1">
-                  Duplicate Personel
+                  Tekrar Eden Personeller
                 </h3>
                 <p className="text-sm text-gray-600">
-                  Duplicate personel kayıtlarını tespit edin ve birleştirin
+                  Tekrar eden personel kayıtlarını tespit edin ve birleştirin
                 </p>
               </div>
               <div className="flex-shrink-0">

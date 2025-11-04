@@ -62,7 +62,8 @@ serve(async (req) => {
       const seen = new Map();
 
       for (const person of personnel || []) {
-        const key = `${person.name.toLowerCase()}_${person.surname.toLowerCase()}`;
+        // Use only name for matching (personnel table doesn't have surname)
+        const key = person.name.toLowerCase().trim();
         
         if (seen.has(key)) {
           const existing = seen.get(key);
