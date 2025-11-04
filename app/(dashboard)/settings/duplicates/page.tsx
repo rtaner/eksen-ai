@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { usePermissions } from '@/lib/hooks/usePermissions';
 import { useDuplicatePersonnel } from '@/lib/hooks/useDuplicatePersonnel';
 import DuplicatePersonnelCard from '@/components/organization/DuplicatePersonnelCard';
@@ -10,6 +10,7 @@ export default function DuplicatesPage() {
   const router = useRouter();
   const { canEdit, isLoading: permissionsLoading } = usePermissions();
   const { duplicates, loading, error, detectDuplicates, mergePersonnel, dismissDuplicate } = useDuplicatePersonnel();
+  const [hasChecked, setHasChecked] = useState(false);
 
   useEffect(() => {
     if (!permissionsLoading && !canEdit('personnel')) {
@@ -18,10 +19,11 @@ export default function DuplicatesPage() {
   }, [permissionsLoading, canEdit, router]);
 
   useEffect(() => {
-    if (canEdit('personnel') && !permissionsLoading) {
+    if (!permissionsLoading && canEdit('personnel') && !hasChecked) {
       detectDuplicates();
+      setHasChecked(true);
     }
-  }, [canEdit, permissionsLoading, detectDuplicates]);
+  }, [permissionsLoading, canEdit, hasChecked, detectDuplicates]);
 
   if (permissionsLoading || loading) {
     return (
