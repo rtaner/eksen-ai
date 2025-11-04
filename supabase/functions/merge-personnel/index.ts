@@ -49,26 +49,26 @@ serve(async (req) => {
     const action = url.searchParams.get('action');
 
     if (action === 'detect') {
-      // Detect duplicates
-      const { data: personnel, error: fetchError } = await supabaseClient
-        .from('personnel')
-        .select('*')
+      // Detect duplicates in profiles (users with accounts)
+      const { data: profiles, error: profilesError } = await supabaseClient
+        .from('profiles')
+        .select('id, name, surname, created_at')
         .eq('organization_id', profile.organization_id)
         .order('created_at', { ascending: true });
 
-      if (fetchError) throw fetchError;
+      if (profilesError) throw profilesError;
 
       const duplicates: any[] = [];
       const seen = new Map();
 
-      for (const person of personnel || []) {
-        // Use only name for matching (personnel table doesn't have surname)
-        const key = person.name.toLowerCase().trim();
+      for (const person of profiles || []) {
+        // Match by full name (name + surname)
+        const key = `${person.name.toLowerCase().trim()}_${person.surname.toLowerCase().trim()}`;
         
         if (seen.has(key)) {
           const existing = seen.get(key);
           
-          // Count related data
+          // Count related data (profiles use their id as personnel_id in tasks/notes)
           const [notesCount1, tasksCount1, notesCount2, tasksCount2] = await Promise.all([
             supabaseClient.from('notes').select('id', { count: 'exact', head: true }).eq('personnel_id', existing.id),
             supabaseClient.from('tasks').select('id', { count: 'exact', head: true }).eq('personnel_id', existing.id),
@@ -79,16 +79,22 @@ serve(async (req) => {
           duplicates.push({
             id: `${existing.id}_${person.id}`,
             record1: {
-              ...existing,
+              id: existing.id,
+              name: existing.name,
+              surname: existing.surname,
+              created_at: existing.created_at,
               notes_count: notesCount1.count || 0,
               tasks_count: tasksCount1.count || 0,
             },
             record2: {
-              ...person,
+              id: person.id,
+              name: person.name,
+              surname: person.surname,
+              created_at: person.created_at,
               notes_count: notesCount2.count || 0,
               tasks_count: tasksCount2.count || 0,
             },
-            suggested_primary: person.user_id ? person.id : existing.id,
+            suggested_primary: (notesCount1.count || 0) + (tasksCount1.count || 0) >= (notesCount2.count || 0) + (tasksCount2.count || 0) ? existing.id : person.id,
           });
         } else {
           seen.set(key, person);
@@ -112,16 +118,16 @@ serve(async (req) => {
 
       // Verify both records belong to the organization
       const { data: records } = await supabaseClient
-        .from('personnel')
+        .from('profiles')
         .select('id, organization_id')
         .in('id', [primaryId, secondaryId]);
 
       if (!records || records.length !== 2) {
-        throw new Error('Personnel records not found');
+        throw new Error('Profile records not found');
       }
 
       if (records.some(r => r.organization_id !== profile.organization_id)) {
-        throw new Error('Personnel records do not belong to your organization');
+        throw new Error('Profile records do not belong to your organization');
       }
 
       // Move notes
@@ -152,9 +158,9 @@ serve(async (req) => {
         })
         .contains('personnel_ids', [secondaryId]);
 
-      // Delete secondary record
+      // Delete secondary profile (this will cascade delete auth.users via ON DELETE CASCADE)
       const { error: deleteError } = await supabaseClient
-        .from('personnel')
+        .from('profiles')
         .delete()
         .eq('id', secondaryId);
 
