@@ -60,27 +60,42 @@ serve(async (req) => {
 
       const { data: personnel, error: personnelError } = await supabaseClient
         .from('personnel')
-        .select('id, name, surname, created_at')
+        .select('id, name, created_at')
         .eq('organization_id', profile.organization_id)
         .order('created_at', { ascending: true });
 
       if (personnelError) throw personnelError;
 
-      // Combine both lists
+      // Combine both lists with normalized structure
       const allPeople = [
-        ...(profiles || []).map(p => ({ ...p, source: 'profile' })),
-        ...(personnel || []).map(p => ({ ...p, source: 'personnel' }))
+        ...(profiles || []).map(p => ({ 
+          id: p.id,
+          name: p.name,
+          surname: p.surname || '',
+          created_at: p.created_at,
+          source: 'profile' 
+        })),
+        ...(personnel || []).map(p => ({ 
+          id: p.id,
+          name: p.name,
+          surname: '',
+          created_at: p.created_at,
+          source: 'personnel' 
+        }))
       ];
 
       const duplicates: any[] = [];
       const seen = new Map();
 
-      // Identify duplicates by name+surname (case-insensitive)
+      // Identify duplicates by full name (case-insensitive)
       for (const person of allPeople) {
-        const key = `${person.name.toLowerCase().trim()}_${person.surname.toLowerCase().trim()}`;
+        // Create key from full name
+        const fullName = person.surname 
+          ? `${person.name.toLowerCase().trim()} ${person.surname.toLowerCase().trim()}`
+          : person.name.toLowerCase().trim();
         
-        if (seen.has(key)) {
-          const existing = seen.get(key);
+        if (seen.has(fullName)) {
+          const existing = seen.get(fullName);
           duplicates.push({
             id: `${existing.id}_${person.id}`,
             record1: {
@@ -104,7 +119,7 @@ serve(async (req) => {
             suggested_primary: existing.id, // Default to older record
           });
         } else {
-          seen.set(key, person);
+          seen.set(fullName, person);
         }
       }
 
