@@ -52,7 +52,7 @@ serve(async (req) => {
       // Detect duplicates in both profiles and personnel tables
       const { data: profiles, error: profilesError } = await supabaseClient
         .from('profiles')
-        .select('id, name, surname, created_at, email')
+        .select('id, name, surname, created_at')
         .eq('organization_id', profile.organization_id)
         .order('created_at', { ascending: true });
 
@@ -60,7 +60,7 @@ serve(async (req) => {
 
       const { data: personnel, error: personnelError } = await supabaseClient
         .from('personnel')
-        .select('id, name, surname, created_at, email')
+        .select('id, name, surname, created_at')
         .eq('organization_id', profile.organization_id)
         .order('created_at', { ascending: true });
 
@@ -87,7 +87,6 @@ serve(async (req) => {
               id: existing.id,
               name: existing.name,
               surname: existing.surname,
-              email: existing.email,
               user_id: existing.source === 'profile' ? existing.id : null,
               created_at: existing.created_at,
               notes_count: 0,
@@ -97,7 +96,6 @@ serve(async (req) => {
               id: person.id,
               name: person.name,
               surname: person.surname,
-              email: person.email,
               user_id: person.source === 'profile' ? person.id : null,
               created_at: person.created_at,
               notes_count: 0,
