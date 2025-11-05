@@ -8,11 +8,11 @@ import Button from '@/components/ui/Button';
 
 export default function ScheduledTaskModal({ task, onClose, onSuccess, createTask, updateTask }: any) {
   const [formData, setFormData] = useState(task || {
-    name: '',
+    name: 'Zamanlanmış Görev', // Auto-generated name
     description: '',
     recurrence_type: 'daily',
     recurrence_config: { type: 'daily' },
-    scheduled_time: '09:00:00',
+    scheduled_time: '17:00:00', // Default deadline time
     assignment_type: 'specific',
     assignment_config: { type: 'specific', personnel_ids: [] },
   });
@@ -101,20 +101,12 @@ export default function ScheduledTaskModal({ task, onClose, onSuccess, createTas
         {/* Content - scroll */}
         <div className="p-4 sm:p-6 overflow-y-auto flex-1">
           <div className="space-y-4">
-            <input
-              type="text"
-              placeholder="Görev Adı"
-              value={formData.name}
-              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-              className="w-full px-4 py-3 border rounded-lg"
-            />
-            
             <textarea
-              placeholder="Açıklama"
+              placeholder="Görev Açıklaması"
               value={formData.description}
               onChange={(e) => setFormData({ ...formData, description: e.target.value })}
               className="w-full px-4 py-3 border rounded-lg"
-              rows={3}
+              rows={4}
             />
 
             <RecurrenceSelector value={formData} onChange={setFormData} />

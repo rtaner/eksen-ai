@@ -51,12 +51,18 @@ export default function RecurrenceSelector({ value, onChange }: any) {
         />
       )}
 
-      <input
-        type="time"
-        value={value.scheduled_time?.substring(0, 5) || '09:00'}
-        onChange={(e) => onChange({ ...value, scheduled_time: e.target.value + ':00' })}
-        className="w-full px-4 py-3 border rounded-lg"
-      />
+      <div className="space-y-2">
+        <label className="block text-sm font-medium text-gray-700">
+          Termin Saati
+        </label>
+        <input
+          type="time"
+          value={value.scheduled_time?.substring(0, 5) || '17:00'}
+          onChange={(e) => onChange({ ...value, scheduled_time: e.target.value + ':00' })}
+          className="w-full px-4 py-3 border rounded-lg"
+        />
+        <p className="text-xs text-gray-500">Görevin tamamlanması gereken saat</p>
+      </div>
     </div>
   );
 }

@@ -83,10 +83,10 @@ serve(async (req) => {
           }
         }
 
-        // Create task instance with time
-        const deadlineWithTime = task.default_time 
-          ? `${todayStr}T${task.default_time}:00`
-          : todayStr;
+        // Create task instance with deadline time
+        const deadlineWithTime = task.scheduled_time 
+          ? `${todayStr}T${task.scheduled_time}`
+          : `${todayStr}T17:00:00`;
 
         const { error: insertError } = await supabaseAdmin
           .from('tasks')
@@ -153,29 +153,27 @@ async function getAssignedPersonnel(supabase: any, task: any): Promise<any[]> {
     const { data } = await supabase
       .from('personnel')
       .select('id')
-      .in('id', personnelIds);
+      .in('id', personnelIds)
+      .eq('organization_id', task.organization_id);
     return data || [];
   } else if (task.assignment_type === 'role') {
     const role = task.assignment_config.role;
     
-    // Get users with the specified role
-    const { data: profiles } = await supabase
-      .from('profiles')
-      .select('id')
-      .eq('organization_id', task.organization_id)
-      .eq('role', role);
-    
-    if (!profiles || profiles.length === 0) return [];
-    
-    // Get personnel records for these users (user_id matches profile id)
-    const userIds = profiles.map((p: any) => p.id);
+    // Get all personnel with the specified role from metadata
     const { data: personnel } = await supabase
       .from('personnel')
-      .select('id')
-      .in('user_id', userIds)
+      .select('id, metadata')
       .eq('organization_id', task.organization_id);
     
-    return personnel || [];
+    if (!personnel || personnel.length === 0) return [];
+    
+    // Filter by role in metadata
+    const filtered = personnel.filter((p: any) => {
+      const personnelRole = p.metadata?.role || 'personnel';
+      return personnelRole === role;
+    });
+    
+    return filtered;
   }
   return [];
 }

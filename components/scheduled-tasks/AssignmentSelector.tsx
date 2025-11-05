@@ -15,8 +15,8 @@ export default function AssignmentSelector({ value, onChange }: any) {
   const loadPersonnel = async () => {
     try {
       const { data, error } = await supabase
-        .from('profiles')
-        .select('id, name, surname, role')
+        .from('personnel')
+        .select('id, name, metadata')
         .order('name');
 
       if (error) {
@@ -24,10 +24,12 @@ export default function AssignmentSelector({ value, onChange }: any) {
         return;
       }
 
-      // name ve surname'i birleştir
+      // Format personnel data
       const formattedData = (data || []).map(p => ({
-        ...p,
-        full_name: `${p.name} ${p.surname}`
+        id: p.id,
+        full_name: p.name,
+        role: p.metadata?.role || 'personnel',
+        has_user: !!p.metadata?.user_id
       }));
 
       setPersonnel(formattedData);
@@ -81,6 +83,7 @@ export default function AssignmentSelector({ value, onChange }: any) {
                     <p className="font-medium">{person.full_name}</p>
                     <p className="text-xs text-gray-500">
                       {person.role === 'owner' ? 'Sahip' : person.role === 'manager' ? 'Yönetici' : 'Personel'}
+                      {!person.has_user && ' • Manuel Eklendi'}
                     </p>
                   </div>
                 </label>
