@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import Image from 'next/image';
+import { Suspense } from 'react';
 import RegisterForm from '@/components/auth/RegisterForm';
 
 export default function RegisterPage() {
@@ -25,7 +26,9 @@ export default function RegisterPage() {
         </div>
 
         <div className="bg-white rounded-lg shadow-md p-6 md:p-8">
-          <RegisterForm />
+          <Suspense fallback={<div className="text-center py-4">Yükleniyor...</div>}>
+            <RegisterForm />
+          </Suspense>
 
           <div className="mt-6 text-center">
             <p className="text-sm text-gray-600">
