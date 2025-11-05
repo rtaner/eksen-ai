@@ -12,6 +12,15 @@ export default function DuplicatesPage() {
   const { duplicates, loading, error, detectDuplicates, mergePersonnel, dismissDuplicate } = useDuplicatePersonnel();
   const [hasChecked, setHasChecked] = useState(false);
 
+  const handleMerge = async (primaryId: string, secondaryId: string) => {
+    const success = await mergePersonnel(primaryId, secondaryId);
+    if (success) {
+      // Redirect to personnel page after successful merge
+      router.push('/personnel');
+    }
+    return success;
+  };
+
   useEffect(() => {
     if (!permissionsLoading && !canEdit('personnel')) {
       router.push('/personnel');
@@ -79,7 +88,7 @@ export default function DuplicatesPage() {
               <DuplicatePersonnelCard
                 key={duplicate.id}
                 duplicate={duplicate}
-                onMerge={mergePersonnel}
+                onMerge={handleMerge}
                 onDismiss={dismissDuplicate}
               />
             ))}

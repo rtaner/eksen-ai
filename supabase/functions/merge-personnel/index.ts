@@ -49,77 +49,94 @@ serve(async (req) => {
     const action = url.searchParams.get('action');
 
     if (action === 'detect') {
-      // Detect duplicates in both profiles and personnel tables
-      const { data: profiles, error: profilesError } = await supabaseClient
-        .from('profiles')
-        .select('id, name, surname, created_at')
-        .eq('organization_id', profile.organization_id)
-        .order('created_at', { ascending: true });
-
-      if (profilesError) throw profilesError;
-
+      // Only check personnel table for duplicates
       const { data: personnel, error: personnelError } = await supabaseClient
         .from('personnel')
-        .select('id, name, created_at')
+        .select('id, name, metadata, created_at')
         .eq('organization_id', profile.organization_id)
         .order('created_at', { ascending: true });
 
       if (personnelError) throw personnelError;
 
-      // Combine both lists with normalized structure
-      const allPeople = [
-        ...(profiles || []).map(p => ({ 
-          id: p.id,
-          name: p.name,
-          surname: p.surname || '',
-          created_at: p.created_at,
-          source: 'profile' 
-        })),
-        ...(personnel || []).map(p => ({ 
-          id: p.id,
-          name: p.name,
-          surname: '',
-          created_at: p.created_at,
-          source: 'personnel' 
-        }))
-      ];
+      // Get all personnel IDs for count queries
+      const personnelIds = (personnel || []).map(p => p.id);
+
+      // Get notes counts for all personnel
+      const { data: notesData } = await supabaseClient
+        .from('notes')
+        .select('personnel_id')
+        .in('personnel_id', personnelIds);
+
+      // Get tasks counts for all personnel
+      const { data: tasksData } = await supabaseClient
+        .from('tasks')
+        .select('personnel_id')
+        .in('personnel_id', personnelIds);
+
+      // Create count maps
+      const notesCounts = new Map();
+      const tasksCounts = new Map();
+
+      (notesData || []).forEach(note => {
+        notesCounts.set(note.personnel_id, (notesCounts.get(note.personnel_id) || 0) + 1);
+      });
+
+      (tasksData || []).forEach(task => {
+        tasksCounts.set(task.personnel_id, (tasksCounts.get(task.personnel_id) || 0) + 1);
+      });
 
       const duplicates: any[] = [];
       const seen = new Map();
 
-      // Identify duplicates by full name (case-insensitive)
-      for (const person of allPeople) {
-        // Create key from full name
-        const fullName = person.surname 
-          ? `${person.name.toLowerCase().trim()} ${person.surname.toLowerCase().trim()}`
-          : person.name.toLowerCase().trim();
+      // Identify duplicates by name (case-insensitive)
+      for (const person of personnel || []) {
+        const normalizedName = person.name.toLowerCase().trim();
+        const userId = person.metadata?.user_id || null;
         
-        if (seen.has(fullName)) {
-          const existing = seen.get(fullName);
+        if (seen.has(normalizedName)) {
+          const existing = seen.get(normalizedName);
+          const existingUserId = existing.metadata?.user_id || null;
+          
+          // Skip if both records have the same user_id (same person, not duplicate)
+          if (userId && existingUserId && userId === existingUserId) {
+            continue;
+          }
+          
+          // This is a real duplicate - either:
+          // 1. Both have different user_ids (different people, coincidence)
+          // 2. One has user_id, other doesn't (manual + member)
+          // 3. Both don't have user_id (two manual entries)
+          
+          // Determine suggested primary: prefer the one with user_id
+          let suggestedPrimary = existing.id;
+          if (!existingUserId && userId) {
+            suggestedPrimary = person.id;
+          }
+          
           duplicates.push({
             id: `${existing.id}_${person.id}`,
             record1: {
               id: existing.id,
               name: existing.name,
-              surname: existing.surname,
-              user_id: existing.source === 'profile' ? existing.id : null,
+              surname: '',
+              user_id: existingUserId,
               created_at: existing.created_at,
-              notes_count: 0,
-              tasks_count: 0,
+              notes_count: notesCounts.get(existing.id) || 0,
+              tasks_count: tasksCounts.get(existing.id) || 0,
             },
             record2: {
               id: person.id,
               name: person.name,
-              surname: person.surname,
-              user_id: person.source === 'profile' ? person.id : null,
+              surname: '',
+              user_id: userId,
               created_at: person.created_at,
-              notes_count: 0,
-              tasks_count: 0,
+              notes_count: notesCounts.get(person.id) || 0,
+              tasks_count: tasksCounts.get(person.id) || 0,
             },
-            suggested_primary: existing.id, // Default to older record
+            suggested_primary: suggestedPrimary,
           });
         } else {
-          seen.set(fullName, person);
+          seen.set(normalizedName, person);
         }
       }
 
@@ -138,24 +155,17 @@ serve(async (req) => {
         throw new Error('Missing primaryId or secondaryId');
       }
 
-      // Check if records are in profiles or personnel table
-      const { data: profileRecords } = await supabaseClient
-        .from('profiles')
-        .select('id, organization_id')
-        .in('id', [primaryId, secondaryId]);
-
+      // Check if records exist in personnel table
       const { data: personnelRecords } = await supabaseClient
         .from('personnel')
         .select('id, organization_id')
         .in('id', [primaryId, secondaryId]);
 
-      const allRecords = [...(profileRecords || []), ...(personnelRecords || [])];
-
-      if (allRecords.length !== 2) {
-        throw new Error('Records not found');
+      if (!personnelRecords || personnelRecords.length !== 2) {
+        throw new Error('Personnel records not found');
       }
 
-      if (allRecords.some(r => r.organization_id !== profile.organization_id)) {
+      if (personnelRecords.some(r => r.organization_id !== profile.organization_id)) {
         throw new Error('Records do not belong to your organization');
       }
 
@@ -175,32 +185,36 @@ serve(async (req) => {
 
       if (tasksError) throw tasksError;
 
-      // Update AI analyses
-      const { error: analysesError } = await supabaseClient
+      // Update AI analyses - get analyses that contain secondaryId
+      const { data: analyses } = await supabaseClient
         .from('ai_analyses')
-        .update({ 
-          personnel_ids: supabaseClient.rpc('array_replace', {
-            arr: supabaseClient.raw('personnel_ids'),
-            old_val: secondaryId,
-            new_val: primaryId
-          })
-        })
+        .select('id, personnel_ids')
         .contains('personnel_ids', [secondaryId]);
 
-      // Delete secondary record (try both tables)
-      const { error: deleteProfileError } = await supabaseClient
-        .from('profiles')
-        .delete()
-        .eq('id', secondaryId);
+      // Update each analysis to replace secondaryId with primaryId
+      if (analyses && analyses.length > 0) {
+        for (const analysis of analyses) {
+          const updatedIds = analysis.personnel_ids.map((id: string) => 
+            id === secondaryId ? primaryId : id
+          );
+          
+          await supabaseClient
+            .from('ai_analyses')
+            .update({ personnel_ids: updatedIds })
+            .eq('id', analysis.id);
+        }
+      }
 
-      const { error: deletePersonnelError } = await supabaseClient
+      // Delete secondary record from personnel table
+      const { error: deleteError } = await supabaseClient
         .from('personnel')
         .delete()
-        .eq('id', secondaryId);
+        .eq('id', secondaryId)
+        .eq('organization_id', profile.organization_id);
 
-      // At least one should succeed
-      if (deleteProfileError && deletePersonnelError) {
-        throw new Error('Failed to delete secondary record');
+      if (deleteError) {
+        console.error('Delete error:', deleteError);
+        throw new Error(`Failed to delete secondary record: ${deleteError.message}`);
       }
 
       return new Response(
