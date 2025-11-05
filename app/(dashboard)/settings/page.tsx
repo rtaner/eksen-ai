@@ -1,5 +1,6 @@
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
+import { createClient as createAdminClient } from '@supabase/supabase-js';
 import Card from '@/components/ui/Card';
 import Link from 'next/link';
 import DashboardModals from '../../../components/dashboard/DashboardModals';
@@ -8,6 +9,12 @@ import InviteCodeCard from '../../../components/settings/InviteCodeCard';
 
 export default async function SettingsPage() {
   const supabase = await createClient();
+  
+  // Admin client for statistics (bypasses RLS)
+  const supabaseAdmin = createAdminClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  );
 
   const {
     data: { user },
@@ -46,21 +53,32 @@ export default async function SettingsPage() {
   sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
   sevenDaysAgo.setHours(0, 0, 0, 0);
 
-  // 1. Fetch uncompleted tasks
-  const { data: tasksData } = await supabase
+  // 1. Fetch uncompleted tasks for this organization
+  // First get all personnel in organization
+  const { data: orgPersonnel } = await supabase
+    .from('personnel')
+    .select('id, name')
+    .eq('organization_id', profile.organization_id);
+
+  const personnelMap = new Map(orgPersonnel?.map(p => [p.id, p]) || []);
+  const personnelIds = Array.from(personnelMap.keys());
+
+  // Then fetch tasks for these personnel (without join to avoid RLS issues)
+  const { data: allTasksData } = await supabase
     .from('tasks')
-    .select(`
-      id,
-      description,
-      deadline,
-      star_rating,
-      personnel:personnel_id (
-        id,
-        name
-      )
-    `)
+    .select('id, description, deadline, star_rating, status, personnel_id')
+    .in('personnel_id', personnelIds.length > 0 ? personnelIds : ['00000000-0000-0000-0000-000000000000'])
     .neq('status', 'closed')
     .order('deadline', { ascending: true });
+
+  // Map personnel info to tasks
+  const tasksData = (allTasksData || []).map((task: any) => ({
+    id: task.id,
+    description: task.description,
+    deadline: task.deadline,
+    star_rating: task.star_rating,
+    personnel: personnelMap.get(task.personnel_id) || { id: task.personnel_id, name: 'Bilinmeyen' },
+  }));
 
   // Transform tasks to match expected format
   const tasks = (tasksData || []).map((task: any) => ({
@@ -71,30 +89,34 @@ export default async function SettingsPage() {
     personnel: Array.isArray(task.personnel) ? task.personnel[0] : task.personnel,
   }));
 
-  // 2. Fetch performance stats
-  const { count: notesCount } = await supabase
+  // 2. Fetch performance stats for this organization (using admin client for statistics)
+  const { count: notesCount } = await supabaseAdmin
     .from('notes')
     .select('*', { count: 'exact', head: true })
+    .in('personnel_id', personnelIds.length > 0 ? personnelIds : ['00000000-0000-0000-0000-000000000000'])
     .gte('created_at', sevenDaysAgo.toISOString());
 
-  const { count: completedTasksCount } = await supabase
+  const { count: completedTasksCount } = await supabaseAdmin
     .from('tasks')
     .select('*', { count: 'exact', head: true })
+    .in('personnel_id', personnelIds.length > 0 ? personnelIds : ['00000000-0000-0000-0000-000000000000'])
     .eq('status', 'closed')
     .gte('completed_at', sevenDaysAgo.toISOString());
 
-  const { data: notes } = await supabase
+  const { data: notes } = await supabaseAdmin
     .from('notes')
     .select('sentiment')
+    .in('personnel_id', personnelIds.length > 0 ? personnelIds : ['00000000-0000-0000-0000-000000000000'])
     .gte('created_at', sevenDaysAgo.toISOString());
 
   const positiveCount = notes?.filter((n) => n.sentiment === 'positive').length || 0;
   const totalNotes = notes?.length || 0;
   const positiveRatio = totalNotes > 0 ? (positiveCount / totalNotes) * 100 : 0;
 
-  const { data: completedTasks } = await supabase
+  const { data: completedTasks } = await supabaseAdmin
     .from('tasks')
     .select('star_rating')
+    .in('personnel_id', personnelIds.length > 0 ? personnelIds : ['00000000-0000-0000-0000-000000000000'])
     .eq('status', 'closed')
     .gte('completed_at', sevenDaysAgo.toISOString())
     .not('star_rating', 'is', null);
@@ -104,45 +126,26 @@ export default async function SettingsPage() {
       ? completedTasks.reduce((sum, t) => sum + (t.star_rating || 0), 0) / completedTasks.length
       : 0;
 
-  // 3. Fetch recent activities
-  const { data: recentNotes } = await supabase
+  // 3. Fetch recent activities for this organization (using admin client)
+  const { data: recentNotes } = await supabaseAdmin
     .from('notes')
-    .select(`
-      id,
-      created_at,
-      personnel:personnel_id (
-        id,
-        name
-      )
-    `)
+    .select('id, created_at, personnel_id')
+    .in('personnel_id', personnelIds.length > 0 ? personnelIds : ['00000000-0000-0000-0000-000000000000'])
     .order('created_at', { ascending: false })
     .limit(10);
 
-  const { data: recentTasksData } = await supabase
+  const { data: recentTasksData } = await supabaseAdmin
     .from('tasks')
-    .select(`
-      id,
-      completed_at,
-      personnel:personnel_id (
-        id,
-        name
-      )
-    `)
+    .select('id, completed_at, personnel_id')
+    .in('personnel_id', personnelIds.length > 0 ? personnelIds : ['00000000-0000-0000-0000-000000000000'])
     .eq('status', 'closed')
     .order('completed_at', { ascending: false })
     .limit(10);
 
-  const { data: recentAnalyses } = await supabase
+  const { data: recentAnalyses } = await supabaseAdmin
     .from('ai_analyses')
-    .select(`
-      id,
-      analysis_type,
-      created_at,
-      personnel:personnel_id (
-        id,
-        name
-      )
-    `)
+    .select('id, analysis_type, created_at, personnel_id')
+    .in('personnel_id', personnelIds.length > 0 ? personnelIds : ['00000000-0000-0000-0000-000000000000'])
     .order('created_at', { ascending: false })
     .limit(10);
 
@@ -151,22 +154,22 @@ export default async function SettingsPage() {
     ...(recentNotes || []).map((n: any) => ({
       id: n.id,
       type: 'note' as const,
-      personnelId: n.personnel?.id || '',
-      personnelName: n.personnel?.name || 'Bilinmeyen',
+      personnelId: n.personnel_id || '',
+      personnelName: personnelMap.get(n.personnel_id)?.name || 'Bilinmeyen',
       date: n.created_at,
     })),
     ...(recentTasksData || []).map((t: any) => ({
       id: t.id,
       type: 'task' as const,
-      personnelId: t.personnel?.id || '',
-      personnelName: t.personnel?.name || 'Bilinmeyen',
+      personnelId: t.personnel_id || '',
+      personnelName: personnelMap.get(t.personnel_id)?.name || 'Bilinmeyen',
       date: t.completed_at,
     })),
     ...(recentAnalyses || []).map((a: any) => ({
       id: a.id,
       type: 'analysis' as const,
-      personnelId: a.personnel?.id || '',
-      personnelName: a.personnel?.name || 'Bilinmeyen',
+      personnelId: a.personnel_id || '',
+      personnelName: personnelMap.get(a.personnel_id)?.name || 'Bilinmeyen',
       date: a.created_at,
       metadata: {
         analysisType: a.analysis_type,

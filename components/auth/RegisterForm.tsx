@@ -1,7 +1,7 @@
 'use client';
 
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, useEffect } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import Input from '@/components/ui/Input';
 import Button from '@/components/ui/Button';
@@ -9,6 +9,7 @@ import type { RegisterFormData } from '@/lib/types';
 
 export default function RegisterForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const supabase = createClient();
 
   const [formData, setFormData] = useState<RegisterFormData>({
@@ -18,6 +19,14 @@ export default function RegisterForm() {
     password: '',
     inviteCode: '',
   });
+
+  // Auto-fill invite code from URL parameter
+  useEffect(() => {
+    const inviteFromUrl = searchParams.get('invite');
+    if (inviteFromUrl) {
+      setFormData(prev => ({ ...prev, inviteCode: inviteFromUrl.toUpperCase() }));
+    }
+  }, [searchParams]);
 
   const [errors, setErrors] = useState<Partial<Record<keyof RegisterFormData, string>>>({});
   const [isLoading, setIsLoading] = useState(false);

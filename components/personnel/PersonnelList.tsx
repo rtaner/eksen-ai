@@ -12,8 +12,6 @@ interface PersonnelListProps {
   canEdit?: boolean;
   canDelete?: boolean;
   onAdd?: () => void;
-  onEdit?: (personnel: Personnel) => void;
-  onDelete?: (personnel: Personnel) => void;
 }
 
 export default function PersonnelList({
@@ -22,8 +20,6 @@ export default function PersonnelList({
   canEdit = false,
   canDelete = false,
   onAdd,
-  onEdit,
-  onDelete,
 }: PersonnelListProps) {
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -78,14 +74,7 @@ export default function PersonnelList({
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {filteredPersonnel.map((p) => (
-            <PersonnelCard
-              key={p.id}
-              personnel={p}
-              canEdit={canEdit}
-              canDelete={canDelete}
-              onEdit={onEdit}
-              onDelete={onDelete}
-            />
+            <PersonnelCard key={p.id} personnel={p} />
           ))}
         </div>
       )}

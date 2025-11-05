@@ -158,22 +158,48 @@ async function getAssignedPersonnel(supabase: any, task: any): Promise<any[]> {
     return data || [];
   } else if (task.assignment_type === 'role') {
     const role = task.assignment_config.role;
+    const results = [];
     
-    // Get all personnel with the specified role from metadata
-    const { data: personnel } = await supabase
+    // 1. Get real users with this role from profiles
+    const { data: profiles } = await supabase
+      .from('profiles')
+      .select('id')
+      .eq('organization_id', task.organization_id)
+      .eq('role', role);
+    
+    if (profiles && profiles.length > 0) {
+      // Get their personnel records
+      for (const profile of profiles) {
+        const { data: personnel } = await supabase
+          .from('personnel')
+          .select('id')
+          .eq('organization_id', task.organization_id)
+          .eq('metadata->>user_id', profile.id)
+          .maybeSingle();
+        
+        if (personnel) {
+          results.push(personnel);
+        }
+      }
+    }
+    
+    // 2. Get manual personnel with this role from metadata
+    const { data: manualPersonnel } = await supabase
       .from('personnel')
       .select('id, metadata')
-      .eq('organization_id', task.organization_id);
+      .eq('organization_id', task.organization_id)
+      .is('metadata->user_id', null);
     
-    if (!personnel || personnel.length === 0) return [];
+    if (manualPersonnel && manualPersonnel.length > 0) {
+      const filtered = manualPersonnel.filter((p: any) => {
+        const personnelRole = p.metadata?.role || 'personnel';
+        return personnelRole === role;
+      });
+      results.push(...filtered);
+    }
     
-    // Filter by role in metadata
-    const filtered = personnel.filter((p: any) => {
-      const personnelRole = p.metadata?.role || 'personnel';
-      return personnelRole === role;
-    });
-    
-    return filtered;
+    console.log(`Role-based assignment for ${role}: Found ${results.length} personnel`);
+    return results;
   }
   return [];
 }
