@@ -136,6 +136,15 @@ export default function NoteForm({ personnelId, editingNote, onSuccess }: NoteFo
       return;
     }
 
+    // Stop recording if active
+    if (isRecording && recognition) {
+      recognition.stop();
+      setIsRecording(false);
+      if (silenceTimer) {
+        clearTimeout(silenceTimer);
+      }
+    }
+
     setIsLoading(true);
     setError(null);
 

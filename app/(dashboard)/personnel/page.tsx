@@ -2,6 +2,10 @@ import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import PersonnelPageClient from '@/components/personnel/PersonnelPageClient';
 
+// Disable caching to always fetch fresh data
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 export default async function PersonnelPage() {
   const supabase = await createClient();
 

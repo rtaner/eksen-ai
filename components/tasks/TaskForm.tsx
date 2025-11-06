@@ -154,6 +154,15 @@ export default function TaskForm({
       return;
     }
 
+    // Stop recording if active
+    if (isRecording && recognition) {
+      recognition.stop();
+      setIsRecording(false);
+      if (silenceTimer) {
+        clearTimeout(silenceTimer);
+      }
+    }
+
     setIsLoading(true);
     setError(null);
 
@@ -322,16 +331,31 @@ export default function TaskForm({
       </div>
 
       {/* Action buttons */}
-      <div className="flex gap-3 justify-end pt-2">
+      <div className="flex flex-col sm:flex-row gap-3 justify-end pt-2 sticky bottom-0 bg-white pb-2 -mx-3 sm:-mx-4 px-3 sm:px-4 border-t border-gray-100 mt-4">
         <Button
           type="button"
           variant="secondary"
-          onClick={onCancel}
+          onClick={() => {
+            // Stop recording if active
+            if (isRecording && recognition) {
+              recognition.stop();
+              setIsRecording(false);
+              if (silenceTimer) {
+                clearTimeout(silenceTimer);
+              }
+            }
+            onCancel?.();
+          }}
           disabled={isLoading}
+          className="w-full sm:w-auto order-2 sm:order-1"
         >
           İptal
         </Button>
-        <Button type="submit" disabled={isLoading || !description.trim()}>
+        <Button 
+          type="submit" 
+          disabled={isLoading || !description.trim()}
+          className="w-full sm:w-auto order-1 sm:order-2"
+        >
           {isLoading ? 'Kaydediliyor...' : isEditMode ? 'Güncelle' : 'Görev Ata'}
         </Button>
       </div>
