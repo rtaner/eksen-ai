@@ -83,10 +83,8 @@ serve(async (req) => {
           }
         }
 
-        // Create task instance with deadline time
-        const deadlineWithTime = task.scheduled_time 
-          ? `${todayStr}T${task.scheduled_time}`
-          : `${todayStr}T17:00:00`;
+        // Create task instance with deadline at end of day (23:59)
+        const deadlineEndOfDay = `${todayStr}T23:59:59`;
 
         const { error: insertError } = await supabaseAdmin
           .from('tasks')
@@ -95,7 +93,7 @@ serve(async (req) => {
             personnel_id: finalPersonnelId,
             author_id: task.created_by,
             description: task.description,
-            deadline: deadlineWithTime,
+            deadline: deadlineEndOfDay,
             status: 'open',
           });
 

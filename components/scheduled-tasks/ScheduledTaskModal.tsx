@@ -12,7 +12,6 @@ export default function ScheduledTaskModal({ task, onClose, onSuccess, createTas
     description: '',
     recurrence_type: 'daily',
     recurrence_config: { type: 'daily' },
-    scheduled_time: '17:00:00', // Default deadline time
     assignment_type: 'specific',
     assignment_config: { type: 'specific', personnel_ids: [] },
   });
@@ -101,6 +100,19 @@ export default function ScheduledTaskModal({ task, onClose, onSuccess, createTas
         {/* Content - scroll */}
         <div className="p-4 sm:p-6 overflow-y-auto flex-1">
           <div className="space-y-4">
+            {/* Info message */}
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+              <div className="flex items-start gap-2">
+                <svg className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                </svg>
+                <div className="text-sm text-blue-800">
+                  <p className="font-medium mb-1">Termin Bilgisi</p>
+                  <p>Oluşturulan görevlerin termin tarihi otomatik olarak <strong>gün sonuna (23:59)</strong> ayarlanır.</p>
+                </div>
+              </div>
+            </div>
+
             <textarea
               placeholder="Görev Açıklaması"
               value={formData.description}
