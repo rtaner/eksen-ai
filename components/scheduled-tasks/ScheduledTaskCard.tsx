@@ -1,12 +1,11 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { createClient } from '@/lib/supabase/client';
 import { useScheduledTasks } from '@/lib/hooks/useScheduledTasks';
 import type { ScheduledTask } from '@/lib/types/scheduled-tasks';
 import {
   getRecurrenceDescription,
-  getAssignmentDescription,
-  formatTime,
 } from '@/lib/types/scheduled-tasks';
 
 interface ScheduledTaskCardProps {
@@ -18,8 +17,76 @@ export default function ScheduledTaskCard({ task, onEdit }: ScheduledTaskCardPro
   const { toggleActive, deleteTask } = useScheduledTasks();
   const [isDeleting, setIsDeleting] = useState(false);
   const [isToggling, setIsToggling] = useState(false);
+  const [assignmentText, setAssignmentText] = useState<string>('');
   // Optimistic update için local state
   const [localIsActive, setLocalIsActive] = useState(task.is_active);
+
+  // Atama bilgisini fetch et
+  useEffect(() => {
+    const fetchAssignmentInfo = async () => {
+      try {
+        console.log('Task assignment:', { 
+          type: task.assignment_type, 
+          config: task.assignment_config,
+          configKeys: Object.keys(task.assignment_config || {})
+        });
+        
+        if (task.assignment_type === 'role') {
+          const config = task.assignment_config as any;
+          
+          const roleLabels: Record<string, string> = {
+            owner: 'Sahipler',
+            manager: 'Yöneticiler',
+            personnel: 'Personeller',
+          };
+          
+          // config.role string olmalı, eğer obje ise veri tutarsız
+          const role = typeof config === 'string' ? config : config?.role;
+          
+          if (role && typeof role === 'string') {
+            setAssignmentText(roleLabels[role] || role);
+          } else {
+            // Veri tutarsız - assignment_type 'role' ama config yanlış
+            setAssignmentText('Rol bazlı atama (hatalı veri)');
+          }
+        } else if (task.assignment_type === 'specific') {
+          const config = task.assignment_config as { personnel_ids: string[] };
+          
+          if (!config.personnel_ids || config.personnel_ids.length === 0) {
+            setAssignmentText('Atama yok');
+            return;
+          }
+
+          // Personel isimlerini fetch et
+          const supabase = createClient();
+          
+          const { data: personnel, error } = await supabase
+            .from('personnel')
+            .select('name')
+            .in('id', config.personnel_ids);
+
+          if (error) {
+            console.error('Error fetching personnel:', error);
+            setAssignmentText(`${config.personnel_ids.length} personel`);
+            return;
+          }
+
+          if (personnel && personnel.length > 0) {
+            const names = personnel.map(p => p.name).join(', ');
+            setAssignmentText(names);
+          } else {
+            // Personel bulunamadı - muhtemelen silinmiş
+            setAssignmentText(`${config.personnel_ids.length} personel (silinmiş)`);
+          }
+        }
+      } catch (error) {
+        console.error('Error in fetchAssignmentInfo:', error);
+        setAssignmentText('Atama bilgisi alınamadı');
+      }
+    };
+
+    fetchAssignmentInfo();
+  }, [task.assignment_type, task.assignment_config]);
 
   const handleToggle = async () => {
     if (isToggling) return;
@@ -62,7 +129,7 @@ export default function ScheduledTaskCard({ task, onEdit }: ScheduledTaskCardPro
         <div className="flex-1 min-w-0">
           <h3
             className={`
-              text-lg font-semibold truncate
+              text-lg font-semibold mb-1
               ${localIsActive ? 'text-gray-900' : 'text-gray-500'}
             `}
           >
@@ -70,7 +137,7 @@ export default function ScheduledTaskCard({ task, onEdit }: ScheduledTaskCardPro
           </h3>
           <p
             className={`
-              text-sm mt-1 line-clamp-2
+              text-sm line-clamp-2
               ${localIsActive ? 'text-gray-600' : 'text-gray-400'}
             `}
           >
@@ -110,16 +177,13 @@ export default function ScheduledTaskCard({ task, onEdit }: ScheduledTaskCardPro
           <span>{getRecurrenceDescription(task)}</span>
         </div>
 
-        {/* Time */}
-        <div className="flex items-center text-sm text-gray-600">
-          <span className="mr-2">🕐</span>
-          <span>{formatTime(task.scheduled_time)}</span>
-        </div>
-
         {/* Assignment */}
-        <div className="flex items-center text-sm text-gray-600">
-          <span className="mr-2">👥</span>
-          <span>{getAssignmentDescription(task)}</span>
+        <div className="flex items-start text-sm text-gray-600">
+          <span className="mr-2 mt-0.5">👥</span>
+          <div className="flex-1">
+            <span className="font-medium">Atanan: </span>
+            <span>{assignmentText || 'Yükleniyor...'}</span>
+          </div>
         </div>
       </div>
 

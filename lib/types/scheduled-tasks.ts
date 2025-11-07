@@ -12,8 +12,8 @@ export type RecurrenceConfig =
 
 // Assignment Configuration
 export type AssignmentConfig =
-  | { type: 'specific'; personnel_ids: string[] }
-  | { type: 'role'; role: UserRole };
+  | { personnel_ids: string[] }
+  | { role: UserRole };
 
 // Main Scheduled Task Interface
 export interface ScheduledTask {
@@ -134,11 +134,11 @@ export function getRecurrenceDescription(task: ScheduledTask): string {
 export function getAssignmentDescription(task: ScheduledTask): string {
   switch (task.assignment_type) {
     case 'specific': {
-      const config = task.assignment_config as { type: 'specific'; personnel_ids: string[] };
+      const config = task.assignment_config as { personnel_ids: string[] };
       return `${config.personnel_ids.length} personel`;
     }
     case 'role': {
-      const config = task.assignment_config as { type: 'role'; role: UserRole };
+      const config = task.assignment_config as { role: UserRole };
       const roleLabels: Record<UserRole, string> = {
         owner: 'Tüm Sahipler',
         manager: 'Tüm Yöneticiler',

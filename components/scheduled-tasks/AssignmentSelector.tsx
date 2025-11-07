@@ -48,7 +48,26 @@ export default function AssignmentSelector({ value, onChange }: any) {
     
     onChange({
       ...value,
-      assignment_config: { type: 'specific', personnel_ids: newIds }
+      assignment_config: { personnel_ids: newIds }
+    });
+  };
+
+  const handleTypeChange = (newType: string) => {
+    // Type değiştiğinde config'i de güncelle
+    const newConfig = newType === 'role' 
+      ? { role: 'manager' }
+      : { personnel_ids: [] };
+    
+    console.log('🔄 Assignment type changed:', {
+      newType,
+      newConfig,
+      fullValue: { ...value, assignment_type: newType, assignment_config: newConfig }
+    });
+    
+    onChange({ 
+      ...value, 
+      assignment_type: newType,
+      assignment_config: newConfig
     });
   };
 
@@ -56,7 +75,7 @@ export default function AssignmentSelector({ value, onChange }: any) {
     <div className="space-y-3">
       <select
         value={value.assignment_type}
-        onChange={(e) => onChange({ ...value, assignment_type: e.target.value })}
+        onChange={(e) => handleTypeChange(e.target.value)}
         className="w-full px-4 py-3 border rounded-lg"
       >
         <option value="specific">Belirli Personeller</option>
@@ -96,7 +115,15 @@ export default function AssignmentSelector({ value, onChange }: any) {
       {value.assignment_type === 'role' && (
         <select
           value={value.assignment_config.role || 'manager'}
-          onChange={(e) => onChange({ ...value, assignment_config: { type: 'role', role: e.target.value } })}
+          onChange={(e) => {
+            const newConfig = { role: e.target.value };
+            console.log('👥 Role changed:', {
+              newRole: e.target.value,
+              newConfig,
+              fullValue: { ...value, assignment_config: newConfig }
+            });
+            onChange({ ...value, assignment_config: newConfig });
+          }}
           className="w-full px-4 py-3 border rounded-lg"
         >
           <option value="owner">Tüm Sahipler</option>

@@ -99,6 +99,13 @@ export function useScheduledTasks() {
 
       if (!profile) throw new Error('Profil bulunamadı');
 
+      // Debug: Log the input data
+      console.log('🔍 Creating scheduled task with data:', {
+        input,
+        assignment_type: input.assignment_type,
+        assignment_config: input.assignment_config
+      });
+
       const { data, error: insertError } = await supabase
         .from('scheduled_tasks')
         .insert({
@@ -109,7 +116,12 @@ export function useScheduledTasks() {
         .select()
         .single();
 
-      if (insertError) throw insertError;
+      if (insertError) {
+        console.error('❌ Insert error:', insertError);
+        throw insertError;
+      }
+
+      console.log('✅ Task created successfully:', data);
 
       // Real-time subscription will handle the update
       return data;

@@ -13,7 +13,7 @@ export default function ScheduledTaskModal({ task, onClose, onSuccess, createTas
     recurrence_type: 'daily',
     recurrence_config: { type: 'daily' },
     assignment_type: 'specific',
-    assignment_config: { type: 'specific', personnel_ids: [] },
+    assignment_config: { personnel_ids: [] },
   });
 
   // Swipe to dismiss için state
@@ -24,6 +24,12 @@ export default function ScheduledTaskModal({ task, onClose, onSuccess, createTas
 
   const handleSubmit = async () => {
     try {
+      console.log('📤 Submitting task with formData:', {
+        formData,
+        assignment_type: formData.assignment_type,
+        assignment_config: formData.assignment_config
+      });
+
       if (task) {
         await updateTask(task.id, formData);
       } else {
