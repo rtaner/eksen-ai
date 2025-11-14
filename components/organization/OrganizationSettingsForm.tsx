@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/client';
 import Input from '@/components/ui/Input';
 import Button from '@/components/ui/Button';
 import Card from '@/components/ui/Card';
+import { useToast } from '@/lib/contexts/ToastContext';
 
 interface OrganizationSettingsFormProps {
   onSuccess?: () => void;
@@ -12,6 +13,7 @@ interface OrganizationSettingsFormProps {
 
 export default function OrganizationSettingsForm({ onSuccess }: OrganizationSettingsFormProps = {}) {
   const supabase = createClient();
+  const { showSuccess, showError } = useToast();
 
   const [organizationName, setOrganizationName] = useState('');
   const [inviteCode, setInviteCode] = useState('');
@@ -19,7 +21,6 @@ export default function OrganizationSettingsForm({ onSuccess }: OrganizationSett
   const [isLoading, setIsLoading] = useState(false);
   const [isFetching, setIsFetching] = useState(true);
   const [errors, setErrors] = useState<{ name?: string; code?: string }>({});
-  const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   useEffect(() => {
     fetchOrganizationData();
@@ -51,7 +52,7 @@ export default function OrganizationSettingsForm({ onSuccess }: OrganizationSett
       setInviteCode(org.invite_code);
     } catch (error) {
       console.error('Error fetching organization:', error);
-      setMessage({ type: 'error', text: 'Organizasyon bilgileri yüklenemedi' });
+      showError('Organizasyon bilgileri yüklenemedi');
     } finally {
       setIsFetching(false);
     }
@@ -78,7 +79,6 @@ export default function OrganizationSettingsForm({ onSuccess }: OrganizationSett
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setMessage(null);
 
     if (!validateForm() || !organizationId) {
       return;
@@ -112,23 +112,17 @@ export default function OrganizationSettingsForm({ onSuccess }: OrganizationSett
 
       if (updateError) throw updateError;
 
-      setMessage({ type: 'success', text: 'Değişiklikler başarıyla kaydedildi' });
+      showSuccess('Değişiklikler başarıyla kaydedildi');
       
       // Call onSuccess callback to close modal
       if (onSuccess) {
         setTimeout(() => {
           onSuccess();
         }, 1500); // Wait 1.5 seconds to show success message
-      } else {
-        // Clear message after 3 seconds if no callback
-        setTimeout(() => setMessage(null), 3000);
       }
     } catch (error) {
       console.error('Error updating organization:', error);
-      setMessage({
-        type: 'error',
-        text: error instanceof Error ? error.message : 'Organizasyon güncellenemedi',
-      });
+      showError(error instanceof Error ? error.message : 'Organizasyon güncellenemedi');
     } finally {
       setIsLoading(false);
     }
@@ -144,18 +138,6 @@ export default function OrganizationSettingsForm({ onSuccess }: OrganizationSett
 
   return (
     <Card>
-      {message && (
-        <div
-          className={`mb-4 p-3 rounded-lg ${
-            message.type === 'success'
-              ? 'bg-green-50 border border-green-200 text-green-800'
-              : 'bg-red-50 border border-red-200 text-red-800'
-          }`}
-        >
-          {message.text}
-        </div>
-      )}
-
       <form onSubmit={handleSubmit} className="space-y-6">
         <Input
           label="Organizasyon Adı"
@@ -194,8 +176,7 @@ export default function OrganizationSettingsForm({ onSuccess }: OrganizationSett
                 onClick={() => {
                   const link = `${window.location.origin}/register?code=${inviteCode}`;
                   navigator.clipboard.writeText(link);
-                  setMessage({ type: 'success', text: 'Link kopyalandı!' });
-                  setTimeout(() => setMessage(null), 2000);
+                  showSuccess('Link kopyalandı!');
                 }}
                 className="flex-shrink-0 px-3 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
               >

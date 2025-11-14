@@ -9,6 +9,7 @@ import UserEditForm from './UserEditForm';
 import UserDeleteConfirm from './UserDeleteConfirm';
 import ManualPersonnelEditForm from './ManualPersonnelEditForm';
 import ManualPersonnelDeleteConfirm from './ManualPersonnelDeleteConfirm';
+import { useToast } from '@/lib/contexts/ToastContext';
 
 interface User {
   id: string;
@@ -30,10 +31,10 @@ interface UserOrPersonnel {
 
 export default function UserManagementClient() {
   const supabase = createClient();
+  const { showSuccess, showError } = useToast();
   const [usersAndPersonnel, setUsersAndPersonnel] = useState<UserOrPersonnel[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [updatingUserId, setUpdatingUserId] = useState<string | null>(null);
-  const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [showUserEditModal, setShowUserEditModal] = useState(false);
   const [showPersonnelEditModal, setShowPersonnelEditModal] = useState(false);
   const [showUserDeleteModal, setShowUserDeleteModal] = useState(false);
@@ -96,7 +97,7 @@ export default function UserManagementClient() {
       setUsersAndPersonnel([...realUsers, ...manualPersonnel]);
     } catch (error) {
       console.error('Error fetching users and personnel:', error);
-      setMessage({ type: 'error', text: 'Kullanıcılar ve personeller yüklenemedi' });
+      showError('Kullanıcılar ve personeller yüklenemedi');
     } finally {
       setIsLoading(false);
     }
@@ -107,7 +108,6 @@ export default function UserManagementClient() {
     newRole: 'manager' | 'personnel'
   ) => {
     setUpdatingUserId(user.id);
-    setMessage(null);
 
     try {
       if (user.isRealUser) {
@@ -151,14 +151,10 @@ export default function UserManagementClient() {
         prev.map((u) => (u.id === user.id ? { ...u, role: newRole } : u))
       );
 
-      setMessage({ type: 'success', text: 'Rol başarıyla güncellendi' });
-      setTimeout(() => setMessage(null), 3000);
+      showSuccess('Rol başarıyla güncellendi');
     } catch (error) {
       console.error('Error updating role:', error);
-      setMessage({
-        type: 'error',
-        text: error instanceof Error ? error.message : 'Rol güncellenemedi',
-      });
+      showError(error instanceof Error ? error.message : 'Rol güncellenemedi');
     } finally {
       setUpdatingUserId(null);
     }
@@ -189,8 +185,7 @@ export default function UserManagementClient() {
     setShowUserEditModal(false);
     setShowPersonnelEditModal(false);
     setSelectedUser(null);
-    setMessage({ type: 'success', text: 'Başarıyla güncellendi' });
-    setTimeout(() => setMessage(null), 3000);
+    showSuccess('Başarıyla güncellendi');
   };
 
   const handleDeleteSuccess = (userId: string) => {
@@ -198,8 +193,7 @@ export default function UserManagementClient() {
     setShowUserDeleteModal(false);
     setShowPersonnelDeleteModal(false);
     setSelectedUser(null);
-    setMessage({ type: 'success', text: 'Başarıyla silindi' });
-    setTimeout(() => setMessage(null), 3000);
+    showSuccess('Başarıyla silindi');
   };
 
   const getRoleBadge = (role: string) => {
@@ -232,18 +226,6 @@ export default function UserManagementClient() {
   return (
     <>
       <Card>
-        {message && (
-          <div
-            className={`mb-4 p-3 rounded-lg ${
-              message.type === 'success'
-                ? 'bg-green-50 border border-green-200 text-green-800'
-                : 'bg-red-50 border border-red-200 text-red-800'
-            }`}
-          >
-            {message.text}
-          </div>
-        )}
-
         <div className="space-y-3">
           {usersAndPersonnel.map((user) => (
             <div

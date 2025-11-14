@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import Card from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
+import { useToast } from '@/lib/contexts/ToastContext';
 
 interface User {
   id: string;
@@ -15,10 +16,10 @@ interface User {
 
 export default function UserRoleManagement() {
   const supabase = createClient();
+  const { showSuccess, showError } = useToast();
   const [users, setUsers] = useState<User[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [updatingUserId, setUpdatingUserId] = useState<string | null>(null);
-  const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   useEffect(() => {
     fetchUsers();
@@ -49,7 +50,7 @@ export default function UserRoleManagement() {
       setUsers(data || []);
     } catch (error) {
       console.error('Error fetching users:', error);
-      setMessage({ type: 'error', text: 'Kullanıcılar yüklenemedi' });
+      showError('Kullanıcılar yüklenemedi');
     } finally {
       setIsLoading(false);
     }
@@ -57,7 +58,6 @@ export default function UserRoleManagement() {
 
   const handleRoleChange = async (userId: string, newRole: 'manager' | 'personnel') => {
     setUpdatingUserId(userId);
-    setMessage(null);
 
     try {
       const { error } = await supabase
@@ -72,16 +72,10 @@ export default function UserRoleManagement() {
         prev.map((u) => (u.id === userId ? { ...u, role: newRole } : u))
       );
 
-      setMessage({ type: 'success', text: 'Rol başarıyla güncellendi' });
-      
-      // Clear message after 3 seconds
-      setTimeout(() => setMessage(null), 3000);
+      showSuccess('Rol başarıyla güncellendi');
     } catch (error) {
       console.error('Error updating role:', error);
-      setMessage({
-        type: 'error',
-        text: error instanceof Error ? error.message : 'Rol güncellenemedi',
-      });
+      showError(error instanceof Error ? error.message : 'Rol güncellenemedi');
     } finally {
       setUpdatingUserId(null);
     }
@@ -123,18 +117,6 @@ export default function UserRoleManagement() {
 
   return (
     <Card>
-      {message && (
-        <div
-          className={`mb-4 p-3 rounded-lg ${
-            message.type === 'success'
-              ? 'bg-green-50 border border-green-200 text-green-800'
-              : 'bg-red-50 border border-red-200 text-red-800'
-          }`}
-        >
-          {message.text}
-        </div>
-      )}
-
       <div className="space-y-3">
         {users.map((user) => (
           <div

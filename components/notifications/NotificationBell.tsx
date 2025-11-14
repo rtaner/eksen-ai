@@ -5,8 +5,10 @@ import { useRouter } from 'next/navigation';
 import { useNotifications } from '@/lib/hooks/useNotifications';
 import { timeAgo } from '@/lib/utils/date';
 import OneSignal from 'react-onesignal';
+import { useToast } from '@/lib/contexts/ToastContext';
 
 export default function NotificationBell() {
+  const { showError } = useToast();
   const [isOpen, setIsOpen] = useState(false);
   const [permissionStatus, setPermissionStatus] = useState<'default' | 'granted' | 'denied'>('default');
   const [isRequestingPermission, setIsRequestingPermission] = useState(false);
@@ -45,7 +47,7 @@ export default function NotificationBell() {
 
   const requestNotificationPermission = async () => {
     if (typeof window === 'undefined' || !('Notification' in window)) {
-      alert('Tarayıcınız bildirimleri desteklemiyor');
+      showError('Tarayıcınız bildirimleri desteklemiyor');
       return;
     }
 
@@ -68,7 +70,7 @@ export default function NotificationBell() {
       }
     } catch (error) {
       console.error('Bildirim izni hatası:', error);
-      alert('Bildirim izni alınamadı. Lütfen tarayıcı ayarlarınızı kontrol edin.');
+      showError('Bildirim izni alınamadı. Lütfen tarayıcı ayarlarınızı kontrol edin.');
     } finally {
       setIsRequestingPermission(false);
     }

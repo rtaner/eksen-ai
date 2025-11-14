@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase/client';
 import Link from 'next/link';
 import Image from 'next/image';
 import NotificationBell from '@/components/notifications/NotificationBell';
+import { useToast } from '@/lib/contexts/ToastContext';
 
 interface NavItem {
   label: string;
@@ -22,6 +23,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const pathname = usePathname();
   const router = useRouter();
   const supabase = createClient();
+  const { showError } = useToast();
   
   const [userRole, setUserRole] = useState<string | null>(null);
   const [userName, setUserName] = useState<string>('');
@@ -100,7 +102,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
       
       if (error) {
         console.error('Logout error:', error);
-        alert('Çıkış yapılırken bir hata oluştu');
+        showError('Çıkış yapılırken bir hata oluştu');
         return;
       }
 
@@ -108,7 +110,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
       router.replace('/login');
     } catch (error) {
       console.error('Logout error:', error);
-      alert('Çıkış yapılırken bir hata oluştu');
+      showError('Çıkış yapılırken bir hata oluştu');
     }
   };
 

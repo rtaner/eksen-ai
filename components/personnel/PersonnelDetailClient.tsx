@@ -15,6 +15,7 @@ import NoteForm from '@/components/notes/NoteForm';
 import ActivityFeed from '@/components/tasks/ActivityFeed';
 import TaskForm from '@/components/tasks/TaskForm';
 import TaskCloseModal from '@/components/tasks/TaskCloseModal';
+import { useToast } from '@/lib/contexts/ToastContext';
 
 interface PersonnelDetailClientProps {
   personnel: Personnel;
@@ -25,6 +26,7 @@ export default function PersonnelDetailClient({
 }: PersonnelDetailClientProps) {
   const supabase = createClient();
   const { user } = useAuth();
+  const { showError } = useToast();
   const { 
     canCreateNoteFor,
     canCreateTaskFor,
@@ -205,7 +207,7 @@ export default function PersonnelDetailClient({
       setNotes((prev) => prev.filter((note) => note.id !== deletingNote.id));
     } catch (error) {
       console.error('Error deleting note:', error);
-      alert('Not silinirken bir hata oluştu');
+      showError('Not silinirken bir hata oluştu');
     }
   };
 
@@ -244,7 +246,7 @@ export default function PersonnelDetailClient({
       setTasks((prev) => prev.filter((task) => task.id !== deletingTask.id));
     } catch (error) {
       console.error('Error deleting task:', error);
-      alert('Görev silinirken bir hata oluştu');
+      showError('Görev silinirken bir hata oluştu');
     }
   };
 
