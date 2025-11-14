@@ -16,7 +16,7 @@ export default function PersonnelPageClient({
   initialPersonnel,
 }: PersonnelPageClientProps) {
   const router = useRouter();
-  const { canCreate } = usePermissions();
+  const { canCreate, canEdit, canDelete } = usePermissions();
   const [personnel, setPersonnel] = useState<Personnel[]>(initialPersonnel);
   const [showAddModal, setShowAddModal] = useState(false);
 
@@ -35,8 +35,8 @@ export default function PersonnelPageClient({
       <PersonnelList
         personnel={personnel}
         canCreate={canCreate('personnel')}
-        canEdit={false}
-        canDelete={false}
+        canEdit={canEdit('personnel')}
+        canDelete={canDelete('personnel')}
         onAdd={handleAdd}
       />
 

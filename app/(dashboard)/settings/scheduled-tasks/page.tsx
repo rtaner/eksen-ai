@@ -9,10 +9,18 @@ import BulkActionsBar from '@/components/scheduled-tasks/BulkActionsBar';
 import Button from '@/components/ui/Button';
 
 export default function ScheduledTasksPage() {
-  const { canCreate, isLoading: permissionsLoading } = usePermissions();
+  const { canCreate, isOwner, isLoading: permissionsLoading } = usePermissions();
   const { tasks, loading, fetchTasks, createTask, updateTask } = useScheduledTasks();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingTask, setEditingTask] = useState(null);
+
+  // Only Owner can access this page
+  if (!permissionsLoading && !isOwner) {
+    if (typeof window !== 'undefined') {
+      window.location.href = '/personnel';
+    }
+    return null;
+  }
 
   return (
     <div className="min-h-screen bg-gray-50 p-4 sm:p-6 lg:p-8">
@@ -32,7 +40,7 @@ export default function ScheduledTasksPage() {
             <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">
               Zamanlanmış Görevler
             </h1>
-            {canCreate('tasks') && (
+            {isOwner && (
               <Button
                 onClick={() => {
                   setEditingTask(null);

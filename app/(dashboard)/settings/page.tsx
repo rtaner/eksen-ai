@@ -251,7 +251,8 @@ export default async function SettingsPage() {
           activities={activities}
         />
 
-        {/* 2. Zamanlanmış Görevler */}
+        {/* 2. Zamanlanmış Görevler (Owner only) */}
+        {isOwner && (
         <Link href="/settings/scheduled-tasks">
           <div className="bg-blue-50 rounded-lg shadow-md p-4 hover:shadow-lg hover:bg-blue-100 transition-all cursor-pointer h-full">
             <div className="flex items-start gap-4">
@@ -284,6 +285,7 @@ export default async function SettingsPage() {
             </div>
           </div>
         </Link>
+        )}
 
         {/* 3. AI Analizleri - Featured (Owner only) */}
         {isOwner && (
@@ -378,7 +380,8 @@ export default async function SettingsPage() {
         </Link>
         )}
 
-        {/* 6.5 Duplicate Personel (Owner/Manager) */}
+        {/* 6.5 Duplicate Personel (Owner only) */}
+        {isOwner && (
         <Link href="/settings/duplicates">
           <Card hover className="h-full">
             <div className="flex items-start gap-4">
@@ -413,6 +416,7 @@ export default async function SettingsPage() {
             </div>
           </Card>
         </Link>
+        )}
 
         {/* 7. Yetki Yönetimi (Owner only) */}
         {isOwner && (

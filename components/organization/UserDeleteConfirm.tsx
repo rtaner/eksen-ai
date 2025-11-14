@@ -32,16 +32,45 @@ export default function UserDeleteConfirm({
     setIsLoading(true);
 
     try {
+      // First, find and delete personnel records associated with this user
+      // Check both: personnel.id = user.id AND personnel.metadata.user_id = user.id
+      
+      // Delete by id (if personnel.id matches profile.id)
+      const { error: personnelError1 } = await supabase
+        .from('personnel')
+        .delete()
+        .eq('id', user.id);
+
+      if (personnelError1 && personnelError1.code !== 'PGRST116') {
+        console.warn('Error deleting personnel by id:', personnelError1);
+      }
+
+      // Delete by metadata.user_id (if personnel has user_id in metadata)
+      const { data: personnelWithUserId } = await supabase
+        .from('personnel')
+        .select('id')
+        .eq('metadata->>user_id', user.id);
+
+      if (personnelWithUserId && personnelWithUserId.length > 0) {
+        const personnelIds = personnelWithUserId.map(p => p.id);
+        const { error: personnelError2 } = await supabase
+          .from('personnel')
+          .delete()
+          .in('id', personnelIds);
+
+        if (personnelError2) {
+          console.warn('Error deleting personnel by user_id:', personnelError2);
+        }
+      }
+
       // Delete user's profile
+      // This will cascade delete related data (notes, tasks, etc.)
       const { error: deleteError } = await supabase
         .from('profiles')
         .delete()
         .eq('id', user.id);
 
       if (deleteError) throw deleteError;
-
-      // Note: Deleting from profiles table will cascade delete related data
-      // due to foreign key constraints (personnel, notes, tasks, etc.)
 
       onSuccess(user.id);
     } catch (err: any) {

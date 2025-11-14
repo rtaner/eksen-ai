@@ -28,7 +28,7 @@ export default function SettingsModals({ item }: SettingsModalsProps) {
   const renderModalContent = () => {
     switch (item.id) {
       case 'organization':
-        return <OrganizationSettingsForm />;
+        return <OrganizationSettingsForm onSuccess={() => setIsOpen(false)} />;
       default:
         return null;
     }

@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/client';
 import PermissionToggle from './PermissionToggle';
 import Button from '@/components/ui/Button';
 import Card from '@/components/ui/Card';
+import { useToast } from '@/lib/contexts/ToastContext';
 
 interface PermissionRow {
   id: string;
@@ -18,11 +19,11 @@ interface PermissionRow {
 
 export default function PermissionMatrix() {
   const supabase = createClient();
+  const { showSuccess, showError } = useToast();
   const [permissions, setPermissions] = useState<PermissionRow[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [organizationId, setOrganizationId] = useState<string | null>(null);
-  const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   const roles: Array<'manager' | 'personnel'> = ['manager', 'personnel'];
   const resources: Array<'personnel' | 'notes' | 'tasks'> = ['personnel', 'notes', 'tasks'];
@@ -82,7 +83,7 @@ export default function PermissionMatrix() {
       setPermissions(data || []);
     } catch (error) {
       console.error('Error fetching permissions:', error);
-      setMessage({ type: 'error', text: 'Yetkiler yüklenemedi' });
+      showError('Yetkiler yüklenemedi');
     } finally {
       setIsLoading(false);
     }
@@ -107,7 +108,6 @@ export default function PermissionMatrix() {
     if (!organizationId) return;
 
     setIsSaving(true);
-    setMessage(null);
 
     try {
       // Update all permissions
@@ -125,13 +125,10 @@ export default function PermissionMatrix() {
 
       await Promise.all(updates);
 
-      setMessage({ type: 'success', text: 'Yetkiler başarıyla kaydedildi' });
-      
-      // Clear message after 3 seconds
-      setTimeout(() => setMessage(null), 3000);
+      showSuccess('Yetkiler başarıyla kaydedildi');
     } catch (error) {
       console.error('Error saving permissions:', error);
-      setMessage({ type: 'error', text: 'Yetkiler kaydedilemedi' });
+      showError('Yetkiler kaydedilemedi');
     } finally {
       setIsSaving(false);
     }
@@ -154,18 +151,6 @@ export default function PermissionMatrix() {
 
   return (
     <div className="space-y-4">
-      {message && (
-        <div
-          className={`p-3 rounded-lg ${
-            message.type === 'success'
-              ? 'bg-green-50 border border-green-200 text-green-800'
-              : 'bg-red-50 border border-red-200 text-red-800'
-          }`}
-        >
-          {message.text}
-        </div>
-      )}
-
       {roles.map((role) => (
         <Card key={role} padding="none">
           <div className="p-4 border-b border-gray-200 bg-gray-50">

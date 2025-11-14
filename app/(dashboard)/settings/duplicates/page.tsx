@@ -8,7 +8,7 @@ import { useRouter } from 'next/navigation';
 
 export default function DuplicatesPage() {
   const router = useRouter();
-  const { canEdit, isLoading: permissionsLoading } = usePermissions();
+  const { canEdit, isOwner, isLoading: permissionsLoading } = usePermissions();
   const { duplicates, loading, error, detectDuplicates, mergePersonnel, dismissDuplicate } = useDuplicatePersonnel();
   const [hasChecked, setHasChecked] = useState(false);
 
@@ -22,17 +22,17 @@ export default function DuplicatesPage() {
   };
 
   useEffect(() => {
-    if (!permissionsLoading && !canEdit('personnel')) {
+    if (!permissionsLoading && !isOwner) {
       router.push('/personnel');
     }
-  }, [permissionsLoading, canEdit, router]);
+  }, [permissionsLoading, isOwner, router]);
 
   useEffect(() => {
-    if (!permissionsLoading && canEdit('personnel') && !hasChecked) {
+    if (!permissionsLoading && isOwner && !hasChecked) {
       detectDuplicates();
       setHasChecked(true);
     }
-  }, [permissionsLoading, canEdit, hasChecked, detectDuplicates]);
+  }, [permissionsLoading, isOwner, hasChecked, detectDuplicates]);
 
   if (permissionsLoading || loading) {
     return (
@@ -47,7 +47,7 @@ export default function DuplicatesPage() {
     );
   }
 
-  if (!canEdit('personnel')) {
+  if (!isOwner) {
     return null;
   }
 

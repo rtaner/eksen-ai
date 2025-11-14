@@ -18,6 +18,7 @@ export interface Profile {
   name: string;
   surname: string;
   username: string;
+  hierarchy_level: number;
   created_at: string;
   updated_at: string;
 }

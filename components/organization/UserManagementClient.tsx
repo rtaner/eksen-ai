@@ -111,10 +111,16 @@ export default function UserManagementClient() {
 
     try {
       if (user.isRealUser) {
-        // Update real user role in profiles table
+        // Calculate hierarchy_level based on role
+        const hierarchyLevel = newRole === 'manager' ? 2 : 1;
+        
+        // Update real user role and hierarchy_level in profiles table
         const { error } = await supabase
           .from('profiles')
-          .update({ role: newRole })
+          .update({ 
+            role: newRole,
+            hierarchy_level: hierarchyLevel 
+          })
           .eq('id', user.id);
 
         if (error) throw error;

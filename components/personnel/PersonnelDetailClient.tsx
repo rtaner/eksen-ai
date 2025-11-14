@@ -25,7 +25,15 @@ export default function PersonnelDetailClient({
 }: PersonnelDetailClientProps) {
   const supabase = createClient();
   const { user } = useAuth();
-  const { canCreate, canEdit, canDelete, isOwner: isOwnerRole } = usePermissions();
+  const { 
+    canCreateNoteFor,
+    canCreateTaskFor,
+    canEditNote, 
+    canDeleteNote, 
+    canEditTask, 
+    canDeleteTask, 
+    isOwner: isOwnerRole 
+  } = usePermissions();
   
   const [notes, setNotes] = useState<Note[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -262,7 +270,7 @@ export default function PersonnelDetailClient({
             
             {/* Action buttons */}
             <div className="flex gap-3">
-              {canCreate('notes') && (
+              {canCreateNoteFor(personnel.id, personnel.metadata) && (
                 <button
                   onClick={() => setIsNoteModalOpen(true)}
                   className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all duration-200 min-h-[48px]"
@@ -273,7 +281,7 @@ export default function PersonnelDetailClient({
                   Not Ekle
                 </button>
               )}
-              {canCreate('tasks') && (
+              {canCreateTaskFor(personnel.id, personnel.metadata) && (
                 <button
                   onClick={() => setIsTaskModalOpen(true)}
                   className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all duration-200 min-h-[48px]"
@@ -341,10 +349,10 @@ export default function PersonnelDetailClient({
               authorNames={authorNames}
               currentUserId={user?.id || ''}
               isOwner={isOwnerRole}
-              canEditNotes={canEdit('notes')}
-              canDeleteNotes={canDelete('notes')}
-              canEditTasks={canEdit('tasks')}
-              canDeleteTasks={canDelete('tasks')}
+              canEditNotes={true} // Permission check happens in ActivityFeed based on author_id
+              canDeleteNotes={true} // Permission check happens in ActivityFeed based on author_id
+              canEditTasks={true}
+              canDeleteTasks={true}
               isFilterOpen={isFilterOpen}
               onEditNote={handleEditNote}
               onDeleteNote={handleDeleteNote}

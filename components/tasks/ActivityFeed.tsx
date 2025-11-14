@@ -121,15 +121,14 @@ export default function ActivityFeed({
             if (item.type === 'note') {
               const note = item.data as Note;
               const authorName = authorNames[note.author_id] || 'Bilinmeyen';
-              const isOwnNote = note.author_id === currentUserId;
 
               return (
                 <NoteItem
                   key={note.id}
                   note={note}
                   authorName={authorName}
-                  canEdit={isOwner || (canEditNotes && isOwnNote)}
-                  canDelete={isOwner || (canDeleteNotes && isOwnNote)}
+                  canEdit={isOwner || (canEditNotes && note.author_id === currentUserId)}
+                  canDelete={isOwner || (canDeleteNotes && note.author_id === currentUserId)}
                   onEdit={onEditNote}
                   onDelete={onDeleteNote}
                 />
@@ -137,14 +136,15 @@ export default function ActivityFeed({
             } else {
               const task = item.data as Task;
               const taskAuthorName = task.author_id ? authorNames[task.author_id] : undefined;
+              const isOwnTask = task.author_id === currentUserId;
 
               return (
                 <TaskItem
                   key={task.id}
                   task={task}
                   authorName={taskAuthorName}
-                  canEdit={canEditTasks}
-                  canDelete={canDeleteTasks}
+                  canEdit={isOwner || (canEditTasks && isOwnTask)}
+                  canDelete={isOwner || (canDeleteTasks && isOwnTask)}
                   onClose={onCloseTask}
                   onEdit={onEditTask}
                   onDelete={onDeleteTask}

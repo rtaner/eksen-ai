@@ -17,15 +17,45 @@ export default async function PersonnelPage() {
     redirect('/login');
   }
 
-  // Fetch profile to get organization_id
+  // Fetch profile to get organization_id, role, name, surname
   const { data: profile } = await supabase
     .from('profiles')
-    .select('organization_id')
+    .select('organization_id, role, name, surname, username, created_at, updated_at')
     .eq('id', user.id)
     .single();
 
   if (!profile) {
     redirect('/login');
+  }
+
+  // Check personnel view permission
+  const { data: permissions } = await supabase
+    .from('permissions')
+    .select('can_view')
+    .eq('organization_id', profile.organization_id)
+    .eq('role', profile.role)
+    .eq('resource_type', 'personnel')
+    .single();
+
+  const canViewPersonnel = profile.role === 'owner' || permissions?.can_view === true;
+
+  // If user cannot view personnel list, only show themselves
+  if (!canViewPersonnel) {
+    // Only show current user
+    const selfPersonnel = [{
+      id: user.id,
+      organization_id: profile.organization_id,
+      name: `${profile.name || ''} ${profile.surname || ''}`.trim() || 'Ben',
+      metadata: {
+        username: profile.username,
+        role: profile.role,
+        from_user: true,
+      },
+      created_at: profile.created_at,
+      updated_at: profile.updated_at,
+    }];
+
+    return <PersonnelPageClient initialPersonnel={selfPersonnel} />;
   }
 
   // Fetch all personnel for the organization
@@ -39,13 +69,20 @@ export default async function PersonnelPage() {
     console.error('Error fetching personnel:', error);
   }
 
-  // Fetch all users (profiles) in the organization except owner
-  const { data: profiles, error: profilesError } = await supabase
+  // Fetch all users (profiles) in the organization
+  // If current user is not owner, exclude owner role from results
+  let profilesQuery = supabase
     .from('profiles')
     .select('*')
     .eq('organization_id', profile.organization_id)
-    .neq('role', 'owner')
     .order('created_at', { ascending: false });
+
+  // Filter out owner role if current user is not owner
+  if (profile.role !== 'owner') {
+    profilesQuery = profilesQuery.neq('role', 'owner');
+  }
+
+  const { data: profiles, error: profilesError } = await profilesQuery;
 
   if (profilesError) {
     console.error('Error fetching profiles:', profilesError);

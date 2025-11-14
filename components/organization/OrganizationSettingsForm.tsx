@@ -6,7 +6,11 @@ import Input from '@/components/ui/Input';
 import Button from '@/components/ui/Button';
 import Card from '@/components/ui/Card';
 
-export default function OrganizationSettingsForm() {
+interface OrganizationSettingsFormProps {
+  onSuccess?: () => void;
+}
+
+export default function OrganizationSettingsForm({ onSuccess }: OrganizationSettingsFormProps = {}) {
   const supabase = createClient();
 
   const [organizationName, setOrganizationName] = useState('');
@@ -110,8 +114,15 @@ export default function OrganizationSettingsForm() {
 
       setMessage({ type: 'success', text: 'Değişiklikler başarıyla kaydedildi' });
       
-      // Clear message after 3 seconds
-      setTimeout(() => setMessage(null), 3000);
+      // Call onSuccess callback to close modal
+      if (onSuccess) {
+        setTimeout(() => {
+          onSuccess();
+        }, 1500); // Wait 1.5 seconds to show success message
+      } else {
+        // Clear message after 3 seconds if no callback
+        setTimeout(() => setMessage(null), 3000);
+      }
     } catch (error) {
       console.error('Error updating organization:', error);
       setMessage({

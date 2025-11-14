@@ -11,10 +11,10 @@ EXCEPTION
 END $$;
 
 -- Create daily job to create scheduled task instances
--- Runs every day at 00:01 UTC (03:01 Turkey time)
+-- Runs every day at 07:00 UTC (10:00 Turkey time)
 SELECT cron.schedule(
   'create-scheduled-task-instances-daily',
-  '1 0 * * *', -- Every day at 00:01 UTC
+  '0 7 * * *', -- Every day at 07:00 UTC
   $$
   SELECT
     net.http_post(
