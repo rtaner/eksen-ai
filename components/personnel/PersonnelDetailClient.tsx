@@ -15,6 +15,8 @@ import NoteForm from '@/components/notes/NoteForm';
 import ActivityFeed from '@/components/tasks/ActivityFeed';
 import TaskForm from '@/components/tasks/TaskForm';
 import TaskCloseModal from '@/components/tasks/TaskCloseModal';
+import TabNavigation from './TabNavigation';
+import ChecklistsTab from './ChecklistsTab';
 import { useToast } from '@/lib/contexts/ToastContext';
 
 interface PersonnelDetailClientProps {
@@ -37,6 +39,7 @@ export default function PersonnelDetailClient({
     isOwner: isOwnerRole 
   } = usePermissions();
   
+  const [activeTab, setActiveTab] = useState<'notes' | 'tasks' | 'checklists'>('notes');
   const [notes, setNotes] = useState<Note[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [authorNames, setAuthorNames] = useState<Record<string, string>>({});
@@ -299,23 +302,32 @@ export default function PersonnelDetailClient({
         </div>
       </Card>
 
-      {/* Main Content */}
+      {/* Main Content with Tabs */}
       <Card>
+        {/* Tab Navigation */}
+        <TabNavigation 
+          activeTab={activeTab} 
+          onTabChange={(tab) => setActiveTab(tab as 'notes' | 'tasks' | 'checklists')} 
+        />
+
         <div className="p-6 space-y-4">
-          {/* Header with real-time indicator and filter toggle */}
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <h2 className="text-lg font-semibold text-gray-900">
-                Notlar ve Görevler
-              </h2>
-              <span className="inline-flex items-center px-2 py-1 rounded-full bg-green-100 text-green-700 text-xs">
-                <span className="w-2 h-2 bg-green-500 rounded-full mr-1 animate-pulse"></span>
-                Canlı
-              </span>
-            </div>
-            
-            {/* Filter toggle button */}
-            <button
+          {/* Notes Tab */}
+          {activeTab === 'notes' && (
+            <>
+              {/* Header with real-time indicator and filter toggle */}
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <h2 className="text-lg font-semibold text-gray-900">
+                    Notlar
+                  </h2>
+                  <span className="inline-flex items-center px-2 py-1 rounded-full bg-green-100 text-green-700 text-xs">
+                    <span className="w-2 h-2 bg-green-500 rounded-full mr-1 animate-pulse"></span>
+                    Canlı
+                  </span>
+                </div>
+                
+                {/* Filter toggle button */}
+                <button
               onClick={() => setIsFilterOpen(!isFilterOpen)}
               className={`flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition-all duration-200 min-h-[44px] ${
                 isFilterOpen
@@ -339,29 +351,75 @@ export default function PersonnelDetailClient({
             </button>
           </div>
 
-          {/* Activity feed (notes and tasks) */}
-          {isLoading ? (
-            <div className="text-center py-8">
-              <p className="text-gray-500">Yükleniyor...</p>
-            </div>
-          ) : (
-            <ActivityFeed
-              notes={notes}
-              tasks={tasks}
-              authorNames={authorNames}
-              currentUserId={user?.id || ''}
-              isOwner={isOwnerRole}
-              canEditNotes={true} // Permission check happens in ActivityFeed based on author_id
-              canDeleteNotes={true} // Permission check happens in ActivityFeed based on author_id
-              canEditTasks={true}
-              canDeleteTasks={true}
-              isFilterOpen={isFilterOpen}
-              onEditNote={handleEditNote}
-              onDeleteNote={handleDeleteNote}
-              onCloseTask={handleCloseTask}
-              onEditTask={handleEditTask}
-              onDeleteTask={handleDeleteTask}
-            />
+              {/* Activity feed (notes only) */}
+              {isLoading ? (
+                <div className="text-center py-8">
+                  <p className="text-gray-500">Yükleniyor...</p>
+                </div>
+              ) : (
+                <ActivityFeed
+                  notes={notes}
+                  tasks={[]} // Only notes in this tab
+                  authorNames={authorNames}
+                  currentUserId={user?.id || ''}
+                  isOwner={isOwnerRole}
+                  canEditNotes={true}
+                  canDeleteNotes={true}
+                  canEditTasks={false}
+                  canDeleteTasks={false}
+                  isFilterOpen={isFilterOpen}
+                  onEditNote={handleEditNote}
+                  onDeleteNote={handleDeleteNote}
+                  onCloseTask={handleCloseTask}
+                  onEditTask={handleEditTask}
+                  onDeleteTask={handleDeleteTask}
+                />
+              )}
+            </>
+          )}
+
+          {/* Tasks Tab */}
+          {activeTab === 'tasks' && (
+            <>
+              <div className="flex items-center gap-3 mb-4">
+                <h2 className="text-lg font-semibold text-gray-900">
+                  Görevler
+                </h2>
+                <span className="inline-flex items-center px-2 py-1 rounded-full bg-green-100 text-green-700 text-xs">
+                  <span className="w-2 h-2 bg-green-500 rounded-full mr-1 animate-pulse"></span>
+                  Canlı
+                </span>
+              </div>
+
+              {isLoading ? (
+                <div className="text-center py-8">
+                  <p className="text-gray-500">Yükleniyor...</p>
+                </div>
+              ) : (
+                <ActivityFeed
+                  notes={[]} // Only tasks in this tab
+                  tasks={tasks}
+                  authorNames={authorNames}
+                  currentUserId={user?.id || ''}
+                  isOwner={isOwnerRole}
+                  canEditNotes={false}
+                  canDeleteNotes={false}
+                  canEditTasks={true}
+                  canDeleteTasks={true}
+                  isFilterOpen={false}
+                  onEditNote={handleEditNote}
+                  onDeleteNote={handleDeleteNote}
+                  onCloseTask={handleCloseTask}
+                  onEditTask={handleEditTask}
+                  onDeleteTask={handleDeleteTask}
+                />
+              )}
+            </>
+          )}
+
+          {/* Checklists Tab */}
+          {activeTab === 'checklists' && (
+            <ChecklistsTab personnelId={personnel.id} />
           )}
         </div>
       </Card>

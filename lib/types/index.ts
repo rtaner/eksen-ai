@@ -168,3 +168,6 @@ export type { Role, ResourceType, TaskStatus };
 
 // Export Analysis types
 export * from './analyses';
+
+// Export Checklist types
+export * from './checklists';
