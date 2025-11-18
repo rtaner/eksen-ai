@@ -4,7 +4,8 @@ const nextConfig = {
   // Performance optimizations
   swcMinify: true,
   compiler: {
-    removeConsole: process.env.NODE_ENV === 'production',
+    // Temporarily enable console logs in production for debugging
+    removeConsole: false,
   },
   async headers() {
     return [
