@@ -140,15 +140,21 @@ export function AuthProvider({ children }: AuthProviderProps) {
     const startTime = performance.now();
     try {
       console.log('[AuthContext] Starting auth data fetch...');
+      console.log('[AuthContext] User ID:', user.id);
+      
       // Fetch profile
+      console.log('[AuthContext] Fetching profile...');
       const profile = await fetchProfile(user.id);
+      console.log('[AuthContext] Profile fetched:', profile);
       
       if (!profile) {
         throw new Error('Profile not found');
       }
 
       // Fetch organization
+      console.log('[AuthContext] Fetching organization:', profile.organization_id);
       const organization = await fetchOrganization(profile.organization_id);
+      console.log('[AuthContext] Organization fetched:', organization);
 
       // Update state atomically
       setState({
