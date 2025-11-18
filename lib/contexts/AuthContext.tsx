@@ -274,7 +274,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
   // Initialize on mount
   useEffect(() => {
     initializeAuth();
-  }, [initializeAuth]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Listen to auth state changes
   useEffect(() => {
