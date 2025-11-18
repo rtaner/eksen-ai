@@ -136,7 +136,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
   };
 
   // Load user data (profile + organization)
-  const loadUserData = async (user: User) => {
+  const loadUserData = useCallback(async (user: User) => {
     const startTime = performance.now();
     try {
       if (process.env.NODE_ENV === 'development') {
@@ -183,10 +183,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
         error: error instanceof Error ? error.message : ERROR_MESSAGES.PROFILE_FETCH_ERROR,
       }));
     }
-  };
+  }, [supabase]);
 
   // Initialize auth on mount
-  const initializeAuth = async () => {
+  const initializeAuth = useCallback(async () => {
     try {
       if (process.env.NODE_ENV === 'development') {
         console.log('[AuthContext] Initializing auth...');
@@ -211,7 +211,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
         error: ERROR_MESSAGES.SESSION_FETCH_ERROR,
       }));
     }
-  };
+  }, [supabase, loadUserData]);
 
   // Handle auth state changes
   const handleAuthStateChange = useCallback(async (event: string, session: any) => {
@@ -231,7 +231,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
         error: null,
       });
     }
-  }, []);
+  }, [loadUserData]);
 
   // Sign out function
   const signOut = useCallback(async () => {
@@ -269,12 +269,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
       setState(prev => ({ ...prev, loading: true }));
       await loadUserData(state.user);
     }
-  }, [state.user]);
+  }, [state.user, loadUserData]);
 
   // Initialize on mount
   useEffect(() => {
     initializeAuth();
-  }, []);
+  }, [initializeAuth]);
 
   // Listen to auth state changes
   useEffect(() => {
