@@ -139,9 +139,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const loadUserData = useCallback(async (user: User) => {
     const startTime = performance.now();
     try {
-      if (process.env.NODE_ENV === 'development') {
-        console.log('[AuthContext] Starting auth data fetch...');
-      }
+      console.log('[AuthContext] Starting auth data fetch...');
       // Fetch profile
       const profile = await fetchProfile(user.id);
       
@@ -164,11 +162,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
       const endTime = performance.now();
       const duration = endTime - startTime;
 
-      if (process.env.NODE_ENV === 'development') {
-        console.log(`[AuthContext] ✅ Auth data loaded successfully in ${duration.toFixed(2)}ms`);
-        if (duration > 500) {
-          console.warn(`[AuthContext] ⚠️ Auth fetch took longer than 500ms: ${duration.toFixed(2)}ms`);
-        }
+      console.log(`[AuthContext] ✅ Auth data loaded successfully in ${duration.toFixed(2)}ms`);
+      if (duration > 500) {
+        console.warn(`[AuthContext] ⚠️ Auth fetch took longer than 500ms: ${duration.toFixed(2)}ms`);
       }
     } catch (error) {
       const endTime = performance.now();
@@ -188,9 +184,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
   // Initialize auth on mount
   const initializeAuth = useCallback(async () => {
     try {
-      if (process.env.NODE_ENV === 'development') {
-        console.log('[AuthContext] Initializing auth...');
-      }
+      console.log('[AuthContext] Initializing auth...');
 
       const { data: { session }, error: sessionError } = await supabase.auth.getSession();
       
@@ -215,9 +209,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   // Handle auth state changes
   const handleAuthStateChange = useCallback(async (event: string, session: any) => {
-    if (process.env.NODE_ENV === 'development') {
-      console.log('[AuthContext] Auth state changed:', event);
-    }
+    console.log('[AuthContext] Auth state changed:', event);
 
     if (session?.user) {
       await loadUserData(session.user);
@@ -251,9 +243,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
         throw error;
       }
 
-      if (process.env.NODE_ENV === 'development') {
-        console.log('[AuthContext] Sign out successful');
-      }
+      console.log('[AuthContext] Sign out successful');
     } catch (error) {
       console.error('[AuthContext] Sign out error:', error);
       setState(prev => ({
@@ -284,9 +274,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     );
 
     return () => {
-      if (process.env.NODE_ENV === 'development') {
-        console.log('[AuthContext] Unsubscribing from auth changes');
-      }
+      console.log('[AuthContext] Unsubscribing from auth changes');
       subscription.unsubscribe();
     };
   }, [handleAuthStateChange, supabase]);
