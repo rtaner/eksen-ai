@@ -20,6 +20,12 @@ export default function OneSignalProvider({ children }: { children: React.ReactN
       }
 
       try {
+        // Check if OneSignal is already initialized
+        if (typeof window !== 'undefined' && (window as any).OneSignalDeferred) {
+          console.log('OneSignal: Already initialized, skipping');
+          return;
+        }
+
         await OneSignal.init({
           appId: process.env.NEXT_PUBLIC_ONESIGNAL_APP_ID,
           allowLocalhostAsSecureOrigin: false,
@@ -70,10 +76,15 @@ export default function OneSignalProvider({ children }: { children: React.ReactN
         }
       } catch (error) {
         console.error('OneSignal initialization error:', error);
+        // Don't throw - allow app to continue even if OneSignal fails
+        console.log('OneSignal: Continuing without push notifications');
       }
     };
 
-    initOneSignal();
+    // Run initialization but don't block app rendering
+    initOneSignal().catch((err) => {
+      console.error('OneSignal: Failed to initialize', err);
+    });
   }, []);
 
   return <>{children}</>;
