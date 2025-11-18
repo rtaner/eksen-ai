@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { createClient } from '@/lib/supabase/client';
-import { useAuth } from './useAuth';
+import { useAuth } from '@/lib/contexts/AuthContext';
 import type { Checklist, ChecklistResult } from '@/lib/types';
 
 interface UseChecklistExecutionReturn {
@@ -12,7 +12,7 @@ interface UseChecklistExecutionReturn {
   isSubmitting: boolean;
   error: string | null;
   toggleItem: (itemId: string) => void;
-  submitResult: () => Promise<ChecklistResult | null>;
+  submitResult: (closingNote?: string) => Promise<ChecklistResult | null>;
   assignToPersonnel: (resultId: string, personnelIds: string[]) => Promise<boolean>;
   reset: () => void;
 }
@@ -51,7 +51,7 @@ export function useChecklistExecution(
   };
 
   // Submit checklist result
-  const submitResult = async (): Promise<ChecklistResult | null> => {
+  const submitResult = async (closingNote?: string): Promise<ChecklistResult | null> => {
     if (!checklist || !user || !profile?.organization_id) {
       setError('Missing required data');
       return null;
@@ -74,6 +74,7 @@ export function useChecklistExecution(
         completed_items: completedItems,
         total_items: checklist.items.length,
         score: parseFloat(score.toFixed(2)),
+        closing_note: closingNote?.trim() || null,
       };
 
       const { data: result, error: submitError } = await supabase

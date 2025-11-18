@@ -12,6 +12,7 @@ interface ChecklistResultCardProps {
 
 export default function ChecklistResultCard({ result }: ChecklistResultCardProps) {
   const [isExpanded, setIsExpanded] = useState(false);
+  const [showComment, setShowComment] = useState(false);
 
   const completedCount = result.completed_items.length;
   const totalCount = result.total_items;
@@ -77,13 +78,23 @@ export default function ChecklistResultCard({ result }: ChecklistResultCardProps
           </div>
         </div>
 
-        {/* Expand/Collapse Button */}
-        <button
-          onClick={() => setIsExpanded(!isExpanded)}
-          className="w-full px-4 py-2 text-sm font-medium text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-        >
-          {isExpanded ? 'Detayları Gizle' : 'Detayları Gör'}
-        </button>
+        {/* Action Buttons */}
+        <div className="flex gap-2">
+          <button
+            onClick={() => setIsExpanded(!isExpanded)}
+            className="flex-1 px-4 py-2 text-sm font-medium text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+          >
+            {isExpanded ? 'Detayları Gizle' : 'Detayları Gör'}
+          </button>
+          {result.closing_note && (
+            <button
+              onClick={() => setShowComment(!showComment)}
+              className="px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 rounded-lg transition-colors border border-gray-300"
+            >
+              {showComment ? 'Yorumu Gizle' : 'Yorumu Gör'}
+            </button>
+          )}
+        </div>
 
         {/* Expanded Details */}
         {isExpanded && (
@@ -137,6 +148,16 @@ export default function ChecklistResultCard({ result }: ChecklistResultCardProps
                     </div>
                   );
                 })}
+            </div>
+          </div>
+        )}
+
+        {/* Expanded Comment */}
+        {showComment && result.closing_note && (
+          <div className="pt-3 border-t space-y-2">
+            <h4 className="font-medium text-gray-900 text-sm">Yorum:</h4>
+            <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
+              <p className="text-gray-700 whitespace-pre-wrap text-sm">{result.closing_note}</p>
             </div>
           </div>
         )}

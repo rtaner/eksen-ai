@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { createClient } from '@/lib/supabase/client';
-import { useAuth } from './useAuth';
+import { useAuth } from '@/lib/contexts/AuthContext';
 import type { Checklist, ChecklistFormData } from '@/lib/types';
 
 interface UseChecklistsReturn {
@@ -19,8 +19,9 @@ export function useChecklists(): UseChecklistsReturn {
   const [checklists, setChecklists] = useState<Checklist[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [hasFetched, setHasFetched] = useState(false);
   
-  const { profile } = useAuth();
+  const { profile, loading: authLoading } = useAuth();
   const supabase = createClient();
 
   // Fetch checklists
@@ -31,7 +32,10 @@ export function useChecklists(): UseChecklistsReturn {
     }
 
     try {
-      setIsLoading(true);
+      // Only show loading on first fetch
+      if (!hasFetched) {
+        setIsLoading(true);
+      }
       setError(null);
 
       const { data, error: fetchError } = await supabase
@@ -44,6 +48,7 @@ export function useChecklists(): UseChecklistsReturn {
       if (fetchError) throw fetchError;
 
       setChecklists(data || []);
+      setHasFetched(true);
     } catch (err) {
       console.error('Error fetching checklists:', err);
       setError(err instanceof Error ? err.message : 'Failed to fetch checklists');
@@ -52,19 +57,23 @@ export function useChecklists(): UseChecklistsReturn {
     }
   };
 
-  // Initial fetch
+  // Initial fetch - wait for auth to complete
   useEffect(() => {
-    fetchChecklists();
-  }, [profile?.organization_id]);
+    if (!authLoading && profile?.organization_id) {
+      fetchChecklists();
+    } else if (!authLoading && !profile) {
+      setIsLoading(false);
+    }
+  }, [authLoading, profile?.organization_id]);
 
-  // Real-time subscription
+  // Real-time subscription - optional, don't block UI
   useEffect(() => {
-    if (!profile?.organization_id) return;
+    if (!profile?.organization_id || !hasFetched) return;
 
     console.log('🔵 Setting up real-time subscription for org:', profile.organization_id);
 
     const channel = supabase
-      .channel('checklists-changes')
+      .channel(`checklists-changes-${profile.organization_id}`)
       .on(
         'postgres_changes',
         {
@@ -95,13 +104,19 @@ export function useChecklists(): UseChecklistsReturn {
           }
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') {
+          console.log('✅ Real-time subscription active');
+        } else if (status === 'CHANNEL_ERROR') {
+          console.warn('⚠️ Real-time subscription error (non-blocking)');
+        }
+      });
 
     return () => {
       console.log('🔵 Unsubscribing from real-time');
-      channel.unsubscribe();
+      supabase.removeChannel(channel);
     };
-  }, [profile?.organization_id, supabase]);
+  }, [profile?.organization_id, hasFetched]);
 
 
   // Create checklist

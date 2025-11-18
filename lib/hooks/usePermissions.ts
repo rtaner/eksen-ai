@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { createClient } from '@/lib/supabase/client';
+import { useAuth } from '@/lib/contexts/AuthContext';
 
 export type ResourceType = 'personnel' | 'notes' | 'tasks' | 'permissions';
 
@@ -56,23 +57,31 @@ const ownerPermission: Permission = {
 
 export function usePermissions(): UsePermissionsReturn {
   const supabase = createClient();
+  const { user, profile, loading: authLoading } = useAuth();
   const [permissions, setPermissions] = useState<ResourcePermissions | null>(null);
-  const [role, setRole] = useState<string | null>(null);
-  const [hierarchyLevel, setHierarchyLevel] = useState<number | null>(null);
-  const [organizationId, setOrganizationId] = useState<string | null>(null);
-  const [userId, setUserId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [hasFetched, setHasFetched] = useState(false);
+
+  // Derive values from AuthContext
+  const role = profile?.role || null;
+  const hierarchyLevel = profile?.hierarchy_level || null;
+  const organizationId = profile?.organization_id || null;
+  const userId = user?.id || null;
 
   useEffect(() => {
-    fetchPermissions();
-  }, []);
+    if (!authLoading && profile) {
+      fetchPermissions();
+    } else if (!authLoading && !profile) {
+      setIsLoading(false);
+    }
+  }, [authLoading, profile?.role, profile?.organization_id]);
 
-  // Real-time subscription for permission changes
+  // Real-time subscription for permission changes - optional, don't block UI
   useEffect(() => {
-    if (!organizationId || !role || role === 'owner') return;
+    if (!organizationId || !role || role === 'owner' || !hasFetched) return;
 
     const channel = supabase
-      .channel('permissions-changes')
+      .channel(`permissions-changes-${organizationId}-${role}`)
       .on(
         'postgres_changes',
         {
@@ -86,34 +95,30 @@ export function usePermissions(): UsePermissionsReturn {
           fetchPermissions();
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') {
+          console.log('✅ Permissions real-time subscription active');
+        } else if (status === 'CHANNEL_ERROR') {
+          console.warn('⚠️ Permissions real-time subscription error (non-blocking)');
+        }
+      });
 
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [organizationId, role]);
+  }, [organizationId, role, hasFetched]);
 
   const fetchPermissions = async () => {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
+      if (!profile || !user) {
         setIsLoading(false);
         return;
       }
 
-      // Get user's profile to find role, organization, and hierarchy level
-      const { data: profile, error: profileError } = await supabase
-        .from('profiles')
-        .select('role, organization_id, hierarchy_level')
-        .eq('id', user.id)
-        .single();
-
-      if (profileError) throw profileError;
-
-      setRole(profile.role);
-      setHierarchyLevel(profile.hierarchy_level);
-      setOrganizationId(profile.organization_id);
-      setUserId(user.id);
+      // Only show loading on first fetch
+      if (!hasFetched) {
+        setIsLoading(true);
+      }
 
       // Owner has full permissions on everything
       if (profile.role === 'owner') {
@@ -123,6 +128,7 @@ export function usePermissions(): UsePermissionsReturn {
           tasks: ownerPermission,
           permissions: ownerPermission,
         });
+        setHasFetched(true);
         setIsLoading(false);
         return;
       }
@@ -155,6 +161,7 @@ export function usePermissions(): UsePermissionsReturn {
       });
 
       setPermissions(permissionsMap);
+      setHasFetched(true);
     } catch (error) {
       console.error('Error fetching permissions:', error);
     } finally {

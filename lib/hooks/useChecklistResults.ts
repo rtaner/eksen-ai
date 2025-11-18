@@ -52,6 +52,7 @@ export function useChecklistResults(personnelId: string): UseChecklistResultsRet
             completed_items,
             total_items,
             score,
+            closing_note,
             completed_at,
             created_at
           )
@@ -142,6 +143,7 @@ export function useChecklistResults(personnelId: string): UseChecklistResultsRet
                 completed_items,
                 total_items,
                 score,
+                closing_note,
                 completed_at,
                 created_at
               )

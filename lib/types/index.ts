@@ -66,6 +66,7 @@ export interface Task {
   deadline: string;
   status: TaskStatus;
   star_rating: number | null;
+  closing_note?: string | null; // Optional comment when closing task
   completed_at: string | null;
   created_at: string;
   updated_at: string;

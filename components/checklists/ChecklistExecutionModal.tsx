@@ -29,13 +29,14 @@ export default function ChecklistExecutionModal({
 
   const [showAssignment, setShowAssignment] = useState(false);
   const [resultId, setResultId] = useState<string | null>(null);
+  const [closingNote, setClosingNote] = useState<string>('');
 
   const handleComplete = async () => {
     if (completedItems.length === 0) {
       return;
     }
 
-    const result = await submitResult();
+    const result = await submitResult(closingNote);
     
     if (result) {
       setResultId(result.id);
@@ -123,6 +124,24 @@ export default function ChecklistExecutionModal({
               </label>
             );
           })}
+      </div>
+
+      {/* Optional Comment */}
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-2">
+          Yorum <span className="text-gray-400 font-normal">(Opsiyonel)</span>
+        </label>
+        <textarea
+          value={closingNote}
+          onChange={(e) => setClosingNote(e.target.value)}
+          placeholder="Checklist hakkında not ekleyebilirsiniz..."
+          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+          rows={3}
+          maxLength={500}
+        />
+        <p className="text-xs text-gray-500 mt-1">
+          {closingNote.length}/500 karakter
+        </p>
       </div>
 
       {/* Actions */}

@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 import OneSignalProvider from "@/components/providers/OneSignalProvider";
 import { ToastProvider } from "@/lib/contexts/ToastContext";
+import { AuthProvider } from "@/lib/contexts/AuthContext";
 
 export const metadata: Metadata = {
   title: "Eksen AI - Personel Geri Bildirim",
@@ -33,9 +34,11 @@ export default function RootLayout({
         <meta name="apple-mobile-web-app-status-bar-style" content="default" />
       </head>
       <body>
-        <ToastProvider>
-          <OneSignalProvider>{children}</OneSignalProvider>
-        </ToastProvider>
+        <AuthProvider>
+          <ToastProvider>
+            <OneSignalProvider>{children}</OneSignalProvider>
+          </ToastProvider>
+        </AuthProvider>
       </body>
     </html>
   );

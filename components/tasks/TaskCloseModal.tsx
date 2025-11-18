@@ -18,6 +18,7 @@ export default function TaskCloseModal({
   onCancel,
 }: TaskCloseModalProps) {
   const [rating, setRating] = useState<number>(3); // Default 3 stars
+  const [comment, setComment] = useState<string>(''); // Optional comment
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -34,13 +35,20 @@ export default function TaskCloseModal({
       // Create fresh client instance to avoid stale session
       const supabase = createClient();
       
+      const updateData: any = {
+        status: 'closed',
+        star_rating: rating,
+        completed_at: new Date().toISOString(),
+      };
+
+      // Add comment if provided
+      if (comment.trim()) {
+        updateData.closing_note = comment.trim();
+      }
+
       const { error: updateError } = await supabase
         .from('tasks')
-        .update({
-          status: 'closed',
-          star_rating: rating,
-          completed_at: new Date().toISOString(),
-        })
+        .update(updateData)
         .eq('id', task.id);
 
       if (updateError) throw updateError;
@@ -91,6 +99,24 @@ export default function TaskCloseModal({
             {rating === 5 && '⭐⭐⭐⭐⭐ Mükemmel'}
           </p>
         </div>
+      </div>
+
+      {/* Optional comment */}
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-2">
+          Yorum <span className="text-gray-400 font-normal">(Opsiyonel)</span>
+        </label>
+        <textarea
+          value={comment}
+          onChange={(e) => setComment(e.target.value)}
+          placeholder="Görev hakkında not ekleyebilirsiniz..."
+          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+          rows={3}
+          maxLength={500}
+        />
+        <p className="text-xs text-gray-500 mt-1">
+          {comment.length}/500 karakter
+        </p>
       </div>
 
       {/* Action buttons */}

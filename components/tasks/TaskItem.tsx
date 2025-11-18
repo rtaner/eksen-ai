@@ -46,8 +46,10 @@ export default function TaskItem({
   onDelete,
 }: TaskItemProps) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [showComment, setShowComment] = useState(false);
   const isOpen = task.status === 'open';
   const overdue = isOpen && isOverdue(task.deadline);
+  const hasComment = !isOpen && task.closing_note && task.closing_note.trim().length > 0;
 
   // Get icon based on performance rating (aligned with note sentiment icons)
   const getTaskIcon = () => {
@@ -203,6 +205,25 @@ export default function TaskItem({
           </Button>
         )}
       </div>
+
+      {/* Show comment button for closed tasks with comments */}
+      {hasComment && (
+        <div className="mt-3 pt-3 border-t border-purple-200">
+          <button
+            onClick={() => setShowComment(!showComment)}
+            className="text-sm text-purple-600 hover:text-purple-700 font-medium flex items-center gap-1"
+          >
+            {showComment ? '▼' : '▶'} Yorumu Gör
+          </button>
+          {showComment && (
+            <div className="mt-2 p-3 bg-white rounded-lg border border-purple-200">
+              <p className="text-sm text-gray-700 whitespace-pre-wrap">
+                {task.closing_note}
+              </p>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

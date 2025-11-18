@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { createClient } from '@/lib/supabase/client';
-import { useAuth } from '@/lib/hooks/useAuth';
+import { useAuth } from '@/lib/contexts/AuthContext';
 import { useChecklistExecution } from '@/lib/hooks/useChecklistExecution';
 import { useToast } from '@/lib/contexts/ToastContext';
 import Button from '@/components/ui/Button';

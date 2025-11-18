@@ -1,12 +1,11 @@
 'use client';
 
-import { useState, useEffect } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
-import { createClient } from '@/lib/supabase/client';
 import Link from 'next/link';
 import Image from 'next/image';
 import NotificationBell from '@/components/notifications/NotificationBell';
 import { useToast } from '@/lib/contexts/ToastContext';
+import { useAuth } from '@/lib/contexts/AuthContext';
 
 interface NavItem {
   label: string;
@@ -22,91 +21,12 @@ interface DashboardLayoutProps {
 export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const pathname = usePathname();
   const router = useRouter();
-  const supabase = createClient();
   const { showError } = useToast();
-  
-  const [userRole, setUserRole] = useState<string | null>(null);
-  const [userName, setUserName] = useState<string>('');
-  const [organizationName, setOrganizationName] = useState<string>('');
-  const [isLoading, setIsLoading] = useState(true);
-
-  useEffect(() => {
-    fetchUserProfile();
-  }, []);
-
-  const fetchUserProfile = async () => {
-    try {
-      // Check cache first
-      const cachedProfile = sessionStorage.getItem('userProfile');
-      if (cachedProfile) {
-        const { role, name, organizationName: orgName } = JSON.parse(cachedProfile);
-        setUserRole(role);
-        setUserName(name);
-        setOrganizationName(orgName);
-        setIsLoading(false);
-        return;
-      }
-
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        router.push('/login');
-        return;
-      }
-
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('role, name, surname, organization_id')
-        .eq('id', user.id)
-        .single();
-
-      if (profile) {
-        setUserRole(profile.role);
-        const fullName = `${profile.name} ${profile.surname}`;
-        setUserName(fullName);
-
-        // Fetch organization name
-        const { data: organization } = await supabase
-          .from('organizations')
-          .select('name')
-          .eq('id', profile.organization_id)
-          .single();
-
-        if (organization) {
-          setOrganizationName(organization.name);
-          
-          // Cache the profile data
-          sessionStorage.setItem('userProfile', JSON.stringify({
-            role: profile.role,
-            name: fullName,
-            organizationName: organization.name
-          }));
-        }
-      }
-    } catch (error) {
-      console.error('Error fetching profile:', error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  const { profile, organization, loading, error, signOut } = useAuth();
 
   const handleLogout = async () => {
     try {
-      // Clear local state first
-      setUserRole(null);
-      setUserName('');
-      setOrganizationName('');
-      sessionStorage.removeItem('userProfile');
-
-      // Sign out from Supabase
-      const { error } = await supabase.auth.signOut();
-      
-      if (error) {
-        console.error('Logout error:', error);
-        showError('Çıkış yapılırken bir hata oluştu');
-        return;
-      }
-
-      // Use router.replace instead of window.location for smoother transition
+      await signOut();
       router.replace('/login');
     } catch (error) {
       console.error('Logout error:', error);
@@ -157,14 +77,37 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     },
   ];
 
+  // Derive user data from profile
+  const userRole = profile?.role || null;
+  const userName = profile ? `${profile.name} ${profile.surname}` : '';
+  const organizationName = organization?.name || '';
+
   const filteredNavItems = navItems.filter(
     (item) => !item.roles || (userRole && item.roles.includes(userRole))
   );
 
-  if (isLoading) {
+  // Show loading state while auth is initializing
+  if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+      </div>
+    );
+  }
+
+  // Show error state if auth failed
+  if (error) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <p className="text-red-600 mb-4">{error}</p>
+          <button
+            onClick={() => router.push('/login')}
+            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+          >
+            Giriş Sayfasına Dön
+          </button>
+        </div>
       </div>
     );
   }

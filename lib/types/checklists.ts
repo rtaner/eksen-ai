@@ -27,6 +27,7 @@ export interface ChecklistResult {
   completed_items: string[]; // Array of item IDs
   total_items: number;
   score: number; // 0.00 to 5.00
+  closing_note: string | null; // Optional comment when completing checklist
   completed_at: string;
   created_at: string;
 }

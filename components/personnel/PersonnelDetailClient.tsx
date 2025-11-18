@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { Personnel, Note, Task } from '@/lib/types';
 import { useRealtime } from '@/lib/hooks/useRealtime';
-import { useAuth } from '@/lib/hooks/useAuth';
+import { useAuth } from '@/lib/contexts/AuthContext';
 import { usePermissions } from '@/lib/hooks/usePermissions';
 import { createClient } from '@/lib/supabase/client';
 import { capitalizeFirst } from '@/lib/utils/textFormat';
@@ -58,11 +58,8 @@ export default function PersonnelDetailClient({
     try {
       setIsLoading(true);
 
-      // Create fresh client instance to avoid stale session
-      const freshClient = createClient();
-
       // Fetch notes
-      const { data: notesData, error: notesError } = await freshClient
+      const { data: notesData, error: notesError } = await supabase
         .from('notes')
         .select('*')
         .eq('personnel_id', personnel.id)
@@ -71,7 +68,7 @@ export default function PersonnelDetailClient({
       if (notesError) throw notesError;
 
       // Fetch all tasks (open and closed)
-      const { data: tasksData, error: tasksError } = await freshClient
+      const { data: tasksData, error: tasksError } = await supabase
         .from('tasks')
         .select('*')
         .eq('personnel_id', personnel.id)
@@ -88,7 +85,7 @@ export default function PersonnelDetailClient({
       const allAuthorIds = [...new Set([...noteAuthorIds, ...taskAuthorIds])];
 
       if (allAuthorIds.length > 0) {
-        const { data: profilesData, error: profilesError } = await freshClient
+        const { data: profilesData, error: profilesError } = await supabase
           .from('profiles')
           .select('id, name, surname')
           .in('id', allAuthorIds);
