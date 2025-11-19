@@ -95,75 +95,51 @@ interface AuthProviderProps {
 }
 
 export function AuthProvider({ children }: AuthProviderProps) {
-  // Singleton Supabase client
-  const supabase = useMemo(() => createClient(), []);
+  // Singleton Supabase client - createClient zaten singleton pattern kullanıyor
+  // useMemo'ya gerek yok, her çağrıda aynı instance döner
+  const supabase = createClient();
   
   // Auth state
   const [state, setState] = useState<AuthState>(initialState);
-
-  // Fetch profile from database
-  const fetchProfile = async (userId: string): Promise<Profile | null> => {
-    try {
-      console.log('[AuthContext] fetchProfile called with userId:', userId);
-      console.log('[AuthContext] Supabase client exists:', !!supabase);
-      
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', userId)
-        .single();
-
-      console.log('[AuthContext] fetchProfile response:', { data, error });
-
-      if (error) throw error;
-      return data;
-    } catch (error) {
-      console.error('[AuthContext] Profile fetch error:', error);
-      throw error;
-    }
-  };
-
-  // Fetch organization from database
-  const fetchOrganization = async (organizationId: string): Promise<Organization | null> => {
-    try {
-      console.log('[AuthContext] fetchOrganization called with id:', organizationId);
-      
-      const { data, error } = await supabase
-        .from('organizations')
-        .select('*')
-        .eq('id', organizationId)
-        .single();
-
-      console.log('[AuthContext] fetchOrganization response:', { data, error });
-
-      if (error) throw error;
-      return data;
-    } catch (error) {
-      console.error('[AuthContext] Organization fetch error:', error);
-      throw error;
-    }
-  };
 
   // Load user data (profile + organization)
   const loadUserData = useCallback(async (user: User) => {
     const startTime = performance.now();
     try {
+      // Optimization: Eğer zaten bu kullanıcı yüklüyse tekrar yükleme
+      if (state.profile && state.user?.id === user.id) {
+        console.log('[AuthContext] User data already loaded, skipping fetch');
+        setState(prev => ({ ...prev, loading: false }));
+        return;
+      }
+
       console.log('[AuthContext] Starting auth data fetch...');
       console.log('[AuthContext] User ID:', user.id);
       
-      // Fetch profile
+      // 1. Fetch profile
       console.log('[AuthContext] Fetching profile...');
-      const profile = await fetchProfile(user.id);
-      console.log('[AuthContext] Profile fetched:', profile);
-      
-      if (!profile) {
-        throw new Error('Profile not found');
-      }
+      const { data: profile, error: profileError } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', user.id)
+        .single();
 
-      // Fetch organization
+      console.log('[AuthContext] Profile response:', { profile, error: profileError });
+
+      if (profileError) throw profileError;
+      if (!profile) throw new Error('Profile not found');
+
+      // 2. Fetch organization
       console.log('[AuthContext] Fetching organization:', profile.organization_id);
-      const organization = await fetchOrganization(profile.organization_id);
-      console.log('[AuthContext] Organization fetched:', organization);
+      const { data: organization, error: orgError } = await supabase
+        .from('organizations')
+        .select('*')
+        .eq('id', profile.organization_id)
+        .single();
+
+      console.log('[AuthContext] Organization response:', { organization, error: orgError });
+
+      if (orgError) throw orgError;
 
       // Update state atomically
       setState({
@@ -190,52 +166,23 @@ export function AuthProvider({ children }: AuthProviderProps) {
       // Set error state
       setState(prev => ({
         ...prev,
+        user, // User var ama profil yoksa yine de user kalsın
         loading: false,
         error: error instanceof Error ? error.message : ERROR_MESSAGES.PROFILE_FETCH_ERROR,
       }));
     }
-  }, [supabase]);
-
-  // Initialize auth on mount
-  const initializeAuth = useCallback(async () => {
-    try {
-      console.log('[AuthContext] Initializing auth...');
-
-      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-      
-      console.log('[AuthContext] getSession result:', { session, error: sessionError });
-      
-      if (sessionError) {
-        throw sessionError;
-      }
-
-      if (session?.user) {
-        console.log('[AuthContext] Session user found, loading user data...');
-        await loadUserData(session.user);
-      } else {
-        console.log('[AuthContext] No session user, setting loading to false');
-        setState(prev => ({ ...prev, loading: false }));
-      }
-    } catch (error) {
-      console.error('[AuthContext] Initialization error:', error);
-      setState(prev => ({
-        ...prev,
-        loading: false,
-        error: ERROR_MESSAGES.SESSION_FETCH_ERROR,
-      }));
-    }
-  }, [supabase, loadUserData]);
+  }, [supabase, state.profile, state.user?.id]);
 
   // Handle auth state changes
   const handleAuthStateChange = useCallback(async (event: string, session: any) => {
     console.log('[AuthContext] Auth state changed:', event);
-    console.log('[AuthContext] handleAuthStateChange session:', session);
+    console.log('[AuthContext] Session:', session?.user?.id || 'No user');
 
     if (session?.user) {
-      console.log('[AuthContext] Session user found in event, loading user data...');
+      console.log('[AuthContext] Session user found, loading user data...');
       await loadUserData(session.user);
     } else {
-      console.log('[AuthContext] No session user in event, logging out...');
+      console.log('[AuthContext] No session user, clearing state...');
       // User logged out
       setState({
         user: null,
@@ -283,14 +230,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
     }
   }, [state.user, loadUserData]);
 
-  // Initialize on mount
-  useEffect(() => {
-    initializeAuth();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
   // Listen to auth state changes
+  // onAuthStateChange otomatik olarak mevcut session'ı kontrol eder ve INITIAL_SESSION event'i tetikler
   useEffect(() => {
+    console.log('[AuthContext] Setting up auth listener...');
+    
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       handleAuthStateChange
     );
