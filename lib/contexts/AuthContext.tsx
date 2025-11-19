@@ -104,11 +104,16 @@ export function AuthProvider({ children }: AuthProviderProps) {
   // Fetch profile from database
   const fetchProfile = async (userId: string): Promise<Profile | null> => {
     try {
+      console.log('[AuthContext] fetchProfile called with userId:', userId);
+      console.log('[AuthContext] Supabase client exists:', !!supabase);
+      
       const { data, error } = await supabase
         .from('profiles')
         .select('*')
         .eq('id', userId)
         .single();
+
+      console.log('[AuthContext] fetchProfile response:', { data, error });
 
       if (error) throw error;
       return data;
@@ -121,11 +126,15 @@ export function AuthProvider({ children }: AuthProviderProps) {
   // Fetch organization from database
   const fetchOrganization = async (organizationId: string): Promise<Organization | null> => {
     try {
+      console.log('[AuthContext] fetchOrganization called with id:', organizationId);
+      
       const { data, error } = await supabase
         .from('organizations')
         .select('*')
         .eq('id', organizationId)
         .single();
+
+      console.log('[AuthContext] fetchOrganization response:', { data, error });
 
       if (error) throw error;
       return data;
