@@ -229,10 +229,13 @@ export function AuthProvider({ children }: AuthProviderProps) {
   // Handle auth state changes
   const handleAuthStateChange = useCallback(async (event: string, session: any) => {
     console.log('[AuthContext] Auth state changed:', event);
+    console.log('[AuthContext] handleAuthStateChange session:', session);
 
     if (session?.user) {
+      console.log('[AuthContext] Session user found in event, loading user data...');
       await loadUserData(session.user);
     } else {
+      console.log('[AuthContext] No session user in event, logging out...');
       // User logged out
       setState({
         user: null,
