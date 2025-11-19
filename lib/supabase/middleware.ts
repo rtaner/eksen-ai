@@ -29,10 +29,11 @@ export async function updateSession(request: NextRequest) {
     }
   );
 
-  // Session'ı refresh et
+  // Session'ı kontrol et (getUser yerine getSession - daha hızlı)
+  // getUser() API call yapar, getSession() sadece cookie'den okur
   const {
-    data: { user },
-  } = await supabase.auth.getUser();
+    data: { session },
+  } = await supabase.auth.getSession();
 
-  return { supabaseResponse, user };
+  return { supabaseResponse, user: session?.user ?? null };
 }
