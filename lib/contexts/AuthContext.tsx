@@ -161,8 +161,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
             .single();
           return result;
         },
-        10000, // 10 saniye timeout
-        'Profil bilgileri yüklenirken zaman aşımı (10 saniye)'
+        1000, // 1 saniye timeout
+        'Profil bilgileri yüklenirken zaman aşımı (1 saniye)'
       );
 
       const { data: profile, error: profileError } = profileResult;
@@ -182,8 +182,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
             .single();
           return result;
         },
-        10000, // 10 saniye timeout
-        'Organizasyon bilgileri yüklenirken zaman aşımı (10 saniye)'
+        1000, // 1 saniye timeout
+        'Organizasyon bilgileri yüklenirken zaman aşımı (1 saniye)'
       );
 
       const { data: organization, error: orgError } = orgResult;

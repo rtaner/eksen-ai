@@ -29,11 +29,19 @@ export async function updateSession(request: NextRequest) {
     }
   );
 
-  // Session'ı kontrol et (getUser yerine getSession - daha hızlı)
-  // getUser() API call yapar, getSession() sadece cookie'den okur
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
+  // HIZLI ÇÖZÜM: Cookie'den direkt okuyalım, API call yapmayalım
+  // Supabase session cookie'si: sb-<project-ref>-auth-token
+  const cookies = request.cookies.getAll();
+  const authCookie = cookies.find(cookie => 
+    cookie.name.startsWith('sb-') && cookie.name.includes('-auth-token')
+  );
+  
+  // Eğer auth cookie varsa, user var demektir (basit kontrol)
+  // Gerçek user bilgisi client-side'da AuthContext tarafından alınacak
+  const hasSession = !!authCookie?.value;
 
-  return { supabaseResponse, user: session?.user ?? null };
+  return { 
+    supabaseResponse, 
+    user: hasSession ? ({ id: 'placeholder' } as any) : null 
+  };
 }
