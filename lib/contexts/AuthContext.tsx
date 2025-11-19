@@ -94,10 +94,44 @@ interface AuthProviderProps {
   children: React.ReactNode;
 }
 
+// Timeout utility for Supabase queries
+async function fetchWithTimeout<T>(
+  queryFn: () => Promise<T>,
+  timeoutMs: number,
+  errorMessage: string
+): Promise<T> {
+  let timeoutId: NodeJS.Timeout;
+  
+  const timeoutPromise = new Promise<T>((_, reject) => {
+    timeoutId = setTimeout(() => {
+      reject(new Error(errorMessage));
+    }, timeoutMs);
+  });
+
+  try {
+    const result = await Promise.race([queryFn(), timeoutPromise]);
+    clearTimeout(timeoutId!);
+    return result;
+  } catch (error) {
+    clearTimeout(timeoutId!);
+    throw error;
+  }
+}
+
 export function AuthProvider({ children }: AuthProviderProps) {
+  // DEBUG LOGLARI - Environment variables kontrolü
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  
+  console.log('[DEBUG Environment] URL defined?', !!url);
+  console.log('[DEBUG Environment] URL value starts with:', url ? url.substring(0, 15) + '...' : 'UNDEFINED');
+  console.log('[DEBUG Environment] Key defined?', !!key);
+  console.log('[DEBUG Environment] Key value starts with:', key ? key.substring(0, 15) + '...' : 'UNDEFINED');
+  
   // Singleton Supabase client - createClient zaten singleton pattern kullanıyor
   // useMemo'ya gerek yok, her çağrıda aynı instance döner
   const supabase = createClient();
+  console.log('[DEBUG Supabase] Client created/retrieved:', !!supabase);
   
   // Auth state
   const [state, setState] = useState<AuthState>(initialState);
@@ -116,27 +150,43 @@ export function AuthProvider({ children }: AuthProviderProps) {
       console.log('[AuthContext] Starting auth data fetch...');
       console.log('[AuthContext] User ID:', user.id);
       
-      // 1. Fetch profile
+      // 1. Fetch profile with timeout
       console.log('[AuthContext] Fetching profile...');
-      const { data: profile, error: profileError } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', user.id)
-        .single();
+      const profileResult = await fetchWithTimeout(
+        async () => {
+          const result = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('id', user.id)
+            .single();
+          return result;
+        },
+        10000, // 10 saniye timeout
+        'Profil bilgileri yüklenirken zaman aşımı (10 saniye)'
+      );
 
+      const { data: profile, error: profileError } = profileResult;
       console.log('[AuthContext] Profile response:', { profile, error: profileError });
 
       if (profileError) throw profileError;
       if (!profile) throw new Error('Profile not found');
 
-      // 2. Fetch organization
+      // 2. Fetch organization with timeout
       console.log('[AuthContext] Fetching organization:', profile.organization_id);
-      const { data: organization, error: orgError } = await supabase
-        .from('organizations')
-        .select('*')
-        .eq('id', profile.organization_id)
-        .single();
+      const orgResult = await fetchWithTimeout(
+        async () => {
+          const result = await supabase
+            .from('organizations')
+            .select('*')
+            .eq('id', profile.organization_id)
+            .single();
+          return result;
+        },
+        10000, // 10 saniye timeout
+        'Organizasyon bilgileri yüklenirken zaman aşımı (10 saniye)'
+      );
 
+      const { data: organization, error: orgError } = orgResult;
       console.log('[AuthContext] Organization response:', { organization, error: orgError });
 
       if (orgError) throw orgError;
