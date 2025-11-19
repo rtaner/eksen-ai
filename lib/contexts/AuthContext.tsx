@@ -203,13 +203,17 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
       const { data: { session }, error: sessionError } = await supabase.auth.getSession();
       
+      console.log('[AuthContext] getSession result:', { session, error: sessionError });
+      
       if (sessionError) {
         throw sessionError;
       }
 
       if (session?.user) {
+        console.log('[AuthContext] Session user found, loading user data...');
         await loadUserData(session.user);
       } else {
+        console.log('[AuthContext] No session user, setting loading to false');
         setState(prev => ({ ...prev, loading: false }));
       }
     } catch (error) {
