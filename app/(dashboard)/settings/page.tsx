@@ -10,11 +10,13 @@ import InviteCodeCard from '../../../components/settings/InviteCodeCard';
 export default async function SettingsPage() {
   const supabase = await createClient();
   
-  // Admin client for statistics (bypasses RLS)
-  const supabaseAdmin = createAdminClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  );
+  // Admin client for statistics (bypasses RLS if key is available)
+  const supabaseAdmin = process.env.SUPABASE_SERVICE_ROLE_KEY
+    ? createAdminClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.SUPABASE_SERVICE_ROLE_KEY
+      )
+    : supabase;
 
   const {
     data: { user },

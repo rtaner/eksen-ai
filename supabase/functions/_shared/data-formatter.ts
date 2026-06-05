@@ -23,18 +23,32 @@ export interface AuthorInfo {
   [key: string]: string; // author_id -> "Name Surname"
 }
 
+export interface ChecklistResult {
+  id: string;
+  checklist_snapshot: {
+    title: string;
+    description?: string;
+  };
+  score: number;
+  closing_note?: string;
+  completed_at: string;
+  completed_by?: string;
+}
+
 /**
  * Format notes and tasks for Gemini prompt
  */
 export function formatDataForPrompt(
   notes: Note[],
   tasks: Task[],
+  checklists: ChecklistResult[],
   authorNames: AuthorInfo
 ): {
   notesJSON: string;
   tasksJSON: string;
   notesCount: number;
   closedTasksCount: number;
+  checklistsCount: number;
 } {
   // Filter closed tasks only
   const closedTasks = tasks.filter((t) => t.status === 'closed' && t.star_rating);
@@ -57,8 +71,17 @@ export function formatDataForPrompt(
     puan: task.star_rating,
   }));
 
+  // Format checklists for JSON
+  const formattedChecklists = checklists.map((checklist) => ({
+    tarih: new Date(checklist.completed_at).toLocaleDateString('tr-TR'),
+    tip: 'checklist',
+    icerik: `[${checklist.checklist_snapshot?.title || 'Checklist'}] ${checklist.closing_note ? 'Not: ' + checklist.closing_note : ''}`,
+    puan: checklist.score || 0, // 0-100 scale
+    degerlendiren: checklist.completed_by ? (authorNames[checklist.completed_by] || 'Bilinmeyen') : 'Sistem',
+  }));
+
   // Combine and sort by date
-  const allData = [...formattedNotes, ...formattedTasks].sort((a, b) => {
+  const allData = [...formattedNotes, ...formattedTasks, ...formattedChecklists].sort((a, b) => {
     const dateA = new Date(a.tarih.split('.').reverse().join('-'));
     const dateB = new Date(b.tarih.split('.').reverse().join('-'));
     return dateA.getTime() - dateB.getTime();
@@ -69,6 +92,7 @@ export function formatDataForPrompt(
     tasksJSON: JSON.stringify(formattedTasks, null, 2),
     notesCount: notes.length,
     closedTasksCount: closedTasks.length,
+    checklistsCount: checklists.length,
   };
 }
 

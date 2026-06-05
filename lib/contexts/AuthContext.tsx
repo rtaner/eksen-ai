@@ -211,7 +211,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       const endTime = performance.now();
       const duration = endTime - startTime;
       
-      console.error(`[AuthContext] ❌ Error loading user data (${duration.toFixed(2)}ms):`, error);
+      console.error(`[AuthContext] ❌ Error loading user data (${duration.toFixed(2)}ms):`, error instanceof Error ? error : JSON.stringify(error));
       
       // Set error state
       setState(prev => ({

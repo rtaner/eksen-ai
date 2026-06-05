@@ -8,6 +8,7 @@ import Card from '@/components/ui/Card';
 import YetkinlikDisplay from './displays/YetkinlikDisplay';
 import EgilimDisplay from './displays/EgilimDisplay';
 import ButunlesikDisplay from './displays/ButunlesikDisplay';
+import KapsamliDisplay from './displays/KapsamliDisplay';
 
 interface AnalysisDetailClientProps {
   analysis: any;
@@ -18,6 +19,7 @@ const analysisTypeLabels = {
   yetkinlik: '📋 Yetkinlik Analizi',
   egilim: '📈 Eğilim Analizi',
   butunlesik: '🔄 Bütünleşik Analiz',
+  kapsamli: '🌟 Bütünleşik Kapsamlı Analiz',
 };
 
 function getRelativeTime(dateString: string): string {
@@ -562,6 +564,14 @@ export default function AnalysisDetailClient({
                     </span>
                   </div>
                 )}
+                {analysis.result?.data_stats && (
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium">📊 Veri Kaynakları:</span>
+                    <span>
+                      {analysis.result.data_stats.notes} Not, {analysis.result.data_stats.tasks} Görev, {analysis.result.data_stats.checklists} Checklist
+                    </span>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -584,7 +594,14 @@ export default function AnalysisDetailClient({
           <EgilimDisplay result={analysis.result} />
         )}
         {analysis.analysis_type === 'butunlesik' && (
-          <ButunlesikDisplay result={analysis.result} />
+          analysis.result?.kocluk_rehberi ? (
+            <KapsamliDisplay result={analysis.result} />
+          ) : (
+            <ButunlesikDisplay result={analysis.result} />
+          )
+        )}
+        {analysis.analysis_type === 'kapsamli' && (
+          <KapsamliDisplay result={analysis.result} />
         )}
       </div>
     </div>

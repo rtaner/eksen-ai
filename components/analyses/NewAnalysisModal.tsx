@@ -59,6 +59,7 @@ export default function NewAnalysisModal({
   const [dataStats, setDataStats] = useState<{
     notesCount: number;
     tasksCount: number;
+    checklistsCount: number;
   } | null>(null);
 
   // Fetch data stats when personnel or date range changes
@@ -89,9 +90,21 @@ export default function NewAnalysisModal({
         .gte('completed_at', dateRangeStart)
         .lte('completed_at', dateRangeEnd);
 
+      // Fetch checklists count
+      const { data: checklistAssignments } = await supabase
+        .from('checklist_assignments')
+        .select('checklist_result:checklist_results(completed_at)')
+        .eq('personnel_id', personnelId);
+
+      const checklistsCount = (checklistAssignments || [])
+        .map((a: any) => a.checklist_result)
+        .filter((c: any) => c && c.completed_at >= dateRangeStart && c.completed_at <= dateRangeEnd)
+        .length;
+
       setDataStats({
         notesCount: notesCount || 0,
         tasksCount: tasksCount || 0,
+        checklistsCount: checklistsCount || 0,
       });
     } catch (error) {
       console.error('Error fetching data stats:', error);
@@ -117,8 +130,8 @@ export default function NewAnalysisModal({
       return;
     }
 
-    if (dataStats && dataStats.notesCount === 0 && dataStats.tasksCount === 0) {
-      setError('Seçilen dönemde not veya tamamlanmış görev bulunamadı');
+    if (dataStats && dataStats.notesCount === 0 && dataStats.tasksCount === 0 && dataStats.checklistsCount === 0) {
+      setError('Seçilen dönemde analiz edilecek veri bulunamadı');
       return;
     }
 
@@ -126,7 +139,7 @@ export default function NewAnalysisModal({
 
     try {
       // Call Edge Function
-      const functionName = `analyze-${analysisType}`;
+      const functionName = `analyze-butunlesik`;
       
       const { data, error: fnError } = await supabase.functions.invoke(
         functionName,
@@ -140,6 +153,9 @@ export default function NewAnalysisModal({
       );
 
       if (fnError) throw fnError;
+      if (data && data.success === false) {
+        throw new Error(`${data.error}\n\nDetails: ${data.details || ''}`);
+      }
 
       if (!data.success) {
         throw new Error(data.error || 'Analiz oluşturulamadı');
@@ -216,30 +232,9 @@ export default function NewAnalysisModal({
           </select>
         </div>
 
-        {/* Analysis Type Select */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Analiz Tipi *
-          </label>
-          <select
-            value={analysisType}
-            onChange={(e) => setAnalysisType(e.target.value as AnalysisType)}
-            disabled={isLoading}
-            required
-            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100"
-          >
-            <option value="yetkinlik">📋 Yetkinlik Analizi</option>
-            <option value="egilim">📈 Eğilim Analizi</option>
-            <option value="butunlesik">🔄 Bütünleşik Analiz</option>
-          </select>
-          <p className="text-xs text-gray-500 mt-1">
-            {analysisType === 'yetkinlik' &&
-              '7 kategori yetkinlik değerlendirmesi ve aksiyon planı'}
-            {analysisType === 'egilim' &&
-              'Performans ve duygu eğilimi, tekrarlayan desenler'}
-            {analysisType === 'butunlesik' &&
-              'Yönetici ve İK perspektifinden bütünleşik analiz'}
-          </p>
+        {/* Analysis Type Select - Hidden since we only have one now */}
+        <div className="hidden">
+          <input type="hidden" value="butunlesik" />
         </div>
 
         {/* Date Range */}
@@ -281,8 +276,9 @@ export default function NewAnalysisModal({
             <ul className="text-sm text-blue-800 space-y-1">
               <li>• {dataStats.notesCount} not</li>
               <li>• {dataStats.tasksCount} tamamlanmış görev</li>
+              <li>• {dataStats.checklistsCount} checklist sonucu</li>
             </ul>
-            {dataStats.notesCount === 0 && dataStats.tasksCount === 0 && (
+            {dataStats.notesCount === 0 && dataStats.tasksCount === 0 && dataStats.checklistsCount === 0 && (
               <p className="text-sm text-red-600 mt-2">
                 ⚠️ Analiz için yeterli veri yok
               </p>
@@ -307,7 +303,8 @@ export default function NewAnalysisModal({
               !personnelId ||
               Boolean(dataStats &&
                 dataStats.notesCount === 0 &&
-                dataStats.tasksCount === 0)
+                dataStats.tasksCount === 0 &&
+                dataStats.checklistsCount === 0)
             }
           >
             {isLoading ? (

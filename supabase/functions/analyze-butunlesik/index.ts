@@ -2,21 +2,18 @@ import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { corsHeaders } from '../_shared/cors.ts';
 import { validateUser, checkOwnerPermission } from '../_shared/supabase-client.ts';
 import { callGemini, parseGeminiJSON } from '../_shared/gemini.ts';
-import { buildButunlesikPrompt, buildYetkinlikPrompt } from '../_shared/prompts.ts';
-import { formatDataForPrompt, formatDateRange } from '../_shared/data-formatter.ts';
+import { buildComprehensiveAnalysisPrompt } from '../_shared/prompts.ts';
+import { formatDataForPrompt } from '../_shared/data-formatter.ts';
 
 serve(async (req) => {
-  // Handle CORS
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
   }
 
   try {
-    // 1. Validate user
     const authHeader = req.headers.get('Authorization');
     const { user, supabase } = await validateUser(authHeader);
 
-    // 2. Check if user is Owner
     const { isOwner } = await checkOwnerPermission(supabase, user.id);
     if (!isOwner) {
       return new Response(
@@ -25,7 +22,6 @@ serve(async (req) => {
       );
     }
 
-    // 3. Parse request body
     const { personnelId, dateRangeStart, dateRangeEnd } = await req.json();
 
     if (!personnelId || !dateRangeStart || !dateRangeEnd) {
@@ -35,7 +31,7 @@ serve(async (req) => {
       );
     }
 
-    // 4. Fetch personnel info
+    // Fetch personnel info
     const { data: personnel, error: personnelError } = await supabase
       .from('personnel')
       .select('id, name, organization_id')
@@ -49,7 +45,7 @@ serve(async (req) => {
       );
     }
 
-    // 5. Fetch notes in date range
+    // Fetch notes in date range
     const { data: notes, error: notesError } = await supabase
       .from('notes')
       .select('id, content, sentiment, is_voice_note, created_at, author_id')
@@ -60,7 +56,7 @@ serve(async (req) => {
 
     if (notesError) throw notesError;
 
-    // 6. Fetch closed tasks in date range
+    // Fetch closed tasks in date range
     const { data: tasks, error: tasksError } = await supabase
       .from('tasks')
       .select('id, description, star_rating, completed_at, deadline, status, created_at')
@@ -72,119 +68,92 @@ serve(async (req) => {
 
     if (tasksError) throw tasksError;
 
-    // 7. Fetch author names
-    const authorIds = [...new Set((notes || []).map((n: any) => n.author_id))];
+    // Fetch checklists in date range
+    const { data: checklistAssignments, error: checklistError } = await supabase
+      .from('checklist_assignments')
+      .select(`
+        checklist_result:checklist_results (
+          id,
+          checklist_snapshot,
+          score,
+          closing_note,
+          completed_at,
+          completed_by
+        )
+      `)
+      .eq('personnel_id', personnelId);
+
+    if (checklistError) throw checklistError;
+
+    // Filter checklists by date and extract them
+    const checklists = (checklistAssignments || [])
+      .map((a: any) => {
+        const res = Array.isArray(a.checklist_result) ? a.checklist_result[0] : a.checklist_result;
+        return res;
+      })
+      .filter((c: any) => c && c.completed_at >= dateRangeStart && c.completed_at <= dateRangeEnd)
+      .sort((a: any, b: any) => new Date(a.completed_at).getTime() - new Date(b.completed_at).getTime());
+
+    // Fetch author names (for notes and checklists)
+    const authorIds = new Set([
+      ...(notes || []).map((n: any) => n.author_id),
+      ...checklists.map((c: any) => c.completed_by)
+    ].filter(Boolean));
+
     const { data: profiles } = await supabase
       .from('profiles')
       .select('id, name, surname')
-      .in('id', authorIds);
+      .in('id', Array.from(authorIds));
 
     const authorNames: Record<string, string> = {};
     (profiles || []).forEach((p: any) => {
       authorNames[p.id] = `${p.name} ${p.surname}`;
     });
 
-    // 8. Check if there's enough data
-    if ((!notes || notes.length === 0) && (!tasks || tasks.length === 0)) {
+    if ((!notes || notes.length === 0) && (!tasks || tasks.length === 0) && checklists.length === 0) {
       return new Response(
-        JSON.stringify({ error: 'Analiz için yeterli veri yok' }),
+        JSON.stringify({ error: 'Analiz için yeterli veri yok (Not, görev veya checklist bulunamadı)' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    // 9. Format data
-    const { notesJSON } = formatDataForPrompt(notes || [], tasks || [], authorNames);
-    const dateRangeFormatted = formatDateRange(dateRangeStart, dateRangeEnd);
+    // Format data
+    const { notesJSON } = formatDataForPrompt(notes || [], tasks || [], checklists, authorNames);
+    const dateRangeFormatted = `${new Date(dateRangeStart).toLocaleDateString('tr-TR')} - ${new Date(dateRangeEnd).toLocaleDateString('tr-TR')}`;
 
-    // 10. STEP 1: Get competency scores (Yetkinlik analizi)
+    // GEMINI CALL
     const geminiApiKey = Deno.env.get('GEMINI_API_KEY');
     if (!geminiApiKey) {
       throw new Error('GEMINI_API_KEY not configured');
     }
 
-    const yetkinlikPrompt = buildYetkinlikPrompt(
+    const prompt = buildComprehensiveAnalysisPrompt(
       personnel.name,
       dateRangeFormatted,
       notesJSON
     );
 
-    const yetkinlikResponse = await callGemini(yetkinlikPrompt, {
+    const geminiResponse = await callGemini(prompt, {
       apiKey: geminiApiKey,
-      model: 'gemini-2.5-flash',
+      model: 'gemini-3.5-flash',
       temperature: 0.7,
       maxOutputTokens: 16384,
     });
 
-    if (!yetkinlikResponse.success) {
-      throw new Error(`Yetkinlik analizi hatası: ${yetkinlikResponse.error}`);
+    if (!geminiResponse.success) {
+      throw new Error(`Kapsamlı analiz hatası: ${geminiResponse.error}`);
     }
 
-    const yetkinlikResult = parseGeminiJSON(yetkinlikResponse.text);
+    const analysisResult = parseGeminiJSON(geminiResponse.text) as any;
 
-    // 11. Calculate numerical scores from yetkinlik analysis
-    const hesaplanmisPuanlar: Record<string, number> = {};
-    
-    if (yetkinlikResult.kategori_analizleri) {
-      yetkinlikResult.kategori_analizleri.forEach((kategori: any, index: number) => {
-        // Calculate score based on sentiment distribution and task ratings
-        const { olumlu, olumsuz, notr, puan_ortalamasi } = kategori.veri_ozeti;
-        const total = olumlu + olumsuz + notr;
-        
-        let score = 3.0; // Default neutral score
-        
-        if (total > 0) {
-          // Sentiment-based score (0-5 scale)
-          const sentimentScore = ((olumlu * 5 + notr * 3 + olumsuz * 1) / total);
-          
-          // If we have task ratings, average them with sentiment
-          if (puan_ortalamasi !== null) {
-            score = (sentimentScore + puan_ortalamasi) / 2;
-          } else {
-            score = sentimentScore;
-          }
-        } else if (puan_ortalamasi !== null) {
-          score = puan_ortalamasi;
-        }
-        
-        // Round to 1 decimal
-        score = Math.round(score * 10) / 10;
-        
-        // Map category name to key
-        const categoryKey = `${index + 1}_${kategori.kategori_adi.split('.')[1]?.trim().replace(/\s+/g, '_') || 'Kategori'}`;
-        hesaplanmisPuanlar[categoryKey] = score;
-      });
-    }
+    // Attach data stats
+    analysisResult.data_stats = {
+      notes: notes?.length || 0,
+      tasks: tasks?.length || 0,
+      checklists: checklists?.length || 0
+    };
 
-    // 12. Format notes list for butunlesik analysis
-    const hamNotListesi = (notes || []).map((note: any, index: number) => ({
-      id: index + 1,
-      tip: note.sentiment === 'positive' ? 'olumlu' : note.sentiment === 'negative' ? 'olumsuz' : 'notr',
-      not: note.content,
-    }));
-
-    // 13. STEP 2: Run integrated analysis
-    const butunlesikPrompt = buildButunlesikPrompt(
-      personnel.name,
-      dateRangeFormatted,
-      hesaplanmisPuanlar,
-      JSON.stringify(hamNotListesi, null, 2)
-    );
-
-    const butunlesikResponse = await callGemini(butunlesikPrompt, {
-      apiKey: geminiApiKey,
-      model: 'gemini-2.5-flash',
-      temperature: 0.7,
-      maxOutputTokens: 16384,
-    });
-
-    if (!butunlesikResponse.success) {
-      throw new Error(`Bütünleşik analiz hatası: ${butunlesikResponse.error}`);
-    }
-
-    // 14. Parse JSON response
-    const analysisResult = parseGeminiJSON(butunlesikResponse.text);
-
-    // 15. Save to database
+    // Save to database
     const { data: savedAnalysis, error: saveError } = await supabase
       .from('ai_analyses')
       .insert({
@@ -193,7 +162,7 @@ serve(async (req) => {
         date_range_start: dateRangeStart,
         date_range_end: dateRangeEnd,
         result: analysisResult,
-        raw_response: butunlesikResponse.text,
+        raw_response: geminiResponse.text,
         created_by: user.id,
       })
       .select()
@@ -201,7 +170,6 @@ serve(async (req) => {
 
     if (saveError) throw saveError;
 
-    // 16. Return success
     return new Response(
       JSON.stringify({
         success: true,
@@ -211,14 +179,16 @@ serve(async (req) => {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       }
     );
-  } catch (error) {
-    console.error('Bütünleşik analiz hatası:', error);
+  } catch (error: any) {
+    console.error('Kapsamlı analiz hatası:', error);
     return new Response(
       JSON.stringify({
-        error: error instanceof Error ? error.message : 'Bilinmeyen hata',
+        success: false,
+        error: error instanceof Error ? error.message : String(error),
+        details: error.stack || 'Bilinmeyen hata detayı'
       }),
       {
-        status: 500,
+        status: 200,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       }
     );

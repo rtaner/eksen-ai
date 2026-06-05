@@ -50,6 +50,7 @@ export async function callGemini(
             maxOutputTokens,
             topP: 0.95,
             topK: 40,
+            responseMimeType: "application/json",
           },
         }),
       }

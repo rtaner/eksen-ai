@@ -1,192 +1,65 @@
-// Gemini prompt templates for different analysis types
+// Gemini prompt templates for the comprehensive analysis
 
 /**
- * Yetkinlik Analizi Prompt
+ * Bütünleşik Kapsamlı Performans ve Gelişim Çerçevesi Prompt'u
+ * 
+ * Yeni 5 katmanlı mimariye uygun tek analiz promptu.
  */
-export function buildYetkinlikPrompt(
+export function buildComprehensiveAnalysisPrompt(
   personnelName: string,
   dateRange: string,
   dataJSON: string
 ): string {
-  return `Sen, perakende sektöründe uzmanlaşmış kıdemli bir İK İş Ortağısın (HR Business Partner). Görevin, sana sunulan ham performans verilerini analiz ederek, bir çalışanın yetkinlik karnesini çıkarmak ve yöneticisine 1-1 görüşme için net bir eylem planı sunmaktır.
+  return `Sen, perakende sektörü için çalışan performansını 360 derece değerlendiren usta bir 'Yönetim Asistanı' yapay zekasın. 
+Görevin, sana sunulan ham verileri analiz edip "🌟 Eksen AI: Bütünleşik Performans ve Gelişim Çerçevesi"ni oluşturmak ve tek, yapılandırılmış bir JSON çıktısı vermektir.
 
-Aşağıdaki çalışanın verilerini, belirlediğim 7 ana yetkinlik kategorisine göre analiz etmeni istiyorum.
+Sana ${personnelName} adlı çalışanın ${dateRange} dönemine ait kronolojik sıraya dizilmiş tüm verilerini veriyorum:
+Bu veriler içinde şunlar var:
+1. Yöneticinin girdiği sübjektif notlar (Olumlu/Olumsuz/Nötr)
+2. Puanlı operasyonel görevler (1-5 yıldız arası)
+3. Objektif Checklist / Denetim form sonuçları (0-100 puan arası, başlık ve değerlendirme notlarıyla)
 
-**Çalışan Bilgileri:**
-* **Adı Soyadı:** ${personnelName}
-* **Değerlendirme Dönemi:** ${dateRange}
-
-**Analiz Edilecek Ham Veri (Notlar ve Görev Puanları):**
+**Ham Veri (Zaman Çizelgesi):**
 ${dataJSON}
 
-**Yetkinlik Kategorileri (Analiz Çerçevesi):**
-1. Müşteri Odaklılık ve Deneyim
-2. Satış Performansı ve İkna Kabiliyeti
-3. Ürün Bilgisi
-4. Operasyonel Mükemmellik ve Sorumluluk (Kasa, stok, iade prosedürleri)
-5. Mağaza Görselliği ve Standartlar (VM, reyon düzeni, katlama)
-6. Ekip Çalışması ve İletişim
-7. Profesyonellik ve Proaktif Olma (İnisiyatif alma, zaman yönetimi, kurallar)
+LÜTFEN AŞAĞIDAKİ 5 KATMANLI JSON YAPISINI EKSİKSİZ ÜRET:
 
-**GÖREVİN:**
-Yukarıdaki ham verileri kullanarak, aşağıdaki JSON formatında bir rapor oluştur:
+1. **Veri Güveni ve Yönetici Önyargı Kontrolü (\`veri_guveni_ve_onyargi\`):**
+   * \`skor\`: Veri yoğunluğu ve tutarlılığına göre "Düşük", "Orta" veya "Yüksek" olarak belirle.
+   * \`onyargi_uyarisi\`: Eğer yönetici sürekli düşük notlar/puanlar vermiş ama Checklist puanları (%80-100) çok yüksekse (veya tam tersi) burada net bir 'Halo/Horn Etkisi' uyarısı yap. Uyumluysa 'Veriler tutarlı' yaz.
 
-1. **Sınıflandırma:** Önce, "Ham Veri" listesindeki *her bir* notu ve görevi, bu 7 yetkinlik kategorisinden hangisiyle en ilgili olduğunu belirleyerek mantıksal olarak sınıflandır.
+2. **Şiddet Ağırlıklı Yetkinlik ve Alt Tema Analizi (\`yetkinlik_karnesi\`):**
+   * Önceden tanımlı şu 7 kategoriyi kullanarak verileri puanla: [1. Müşteri Odaklılık, 2. Satış Performansı, 3. Ürün Bilgisi, 4. Operasyonel Mükemmellik, 5. Mağaza Görselliği, 6. Ekip Çalışması, 7. Profesyonellik].
+   * \`kategoriler\` listesi oluştur. Her kategori için:
+     - \`adi\`: Kategori adı.
+     - \`puan_1_5\`: Checklist sonuçlarını, görevleri ve notların şiddetini birleştirerek 1.0 ile 5.0 arası adil bir karne notu belirle (Checklist 100=5, 80=4, vb. gibi orantıla). Veri yoksa null bırak.
+     - \`alt_temalar\`: O kategoride en çok göze çarpan spesifik kelimeler/temalar (örn: "Kasa Kapanış Rutini", "Müşteri Karşılaması").
+     - \`kisa_degerlendirme\`: O kategoriye ait somut olaylardan (örn: "Şu tarihli checklistte görüldüğü gibi...") 1 cümlelik özet kanıt.
 
-2. **Genel Yönetici Özeti (\`genel_yonetici_ozeti\`):** Tüm kategorileri analiz ettikten sonra, çalışanın genel performansını 1-2 paragrafta özetle. En güçlü 1-2 yönünü ve en kritik 1-2 gelişim alanını vurgula.
+3. **Eğilim ve Erken Uyarı Sistemi (\`zaman_ve_trend\`):**
+   * \`performans_ivmesi\`: 'Yükseliş', 'Düşüş', 'Dalgalı' veya 'İstikrarlı'.
+   * \`trend_aciklamasi\`: İvmenin nedeni (Örn: "Dönem başında iyi olan operasyon puanları son 2 haftada ciddi düşüş gösterdi").
+   * \`erken_uyari_bayraklari\`: Peş peşe gelen olumsuz hatalar, tükenmişlik veya motivasyon kaybı sinyalleri varsa liste halinde (string dizisi) yaz. Risk yoksa boş liste bırak.
 
-3. **Kategori Bazlı Detaylı Analiz (\`kategori_analizleri\` listesi):** 7 kategorinin **her biri için** ayrı bir nesne oluştur. Bu nesne şunları içermeli:
-   * \`kategori_adi\`: (örn: "1. Müşteri Odaklılık ve Deneyim")
-   * \`veri_ozeti\`: O kategoriye sınıflandırdığın notların sayısal dökümü (örn: { "olumlu": 3, "olumsuz": 1, "notr": 0 }) VE o kategoriye düşen görev puanlarının ortalaması (\`puan_ortalamasi\`: örn: 4.5, eğer ilgili görev yoksa null).
-   * \`degerlendirme_notu\`: (En önemli kısım) O kategoriye ait notların *içeriğine* ve puanlara dayanarak, çalışanın o kategorideki performansını yorumlayan profesyonel bir İK değerlendirme metni yaz. Güçlü yönleri ve gelişim alanlarını somut not örneklerine (örn: "Kasa açığı notunda görüldüğü gibi...") atıfta bulunarak açıkla.
+4. **Davranışsal Desenler ve Kritik Olaylar (\`davranissal_ve_kritik_analiz\`):**
+   * \`kritik_olaylar\`: Sıradan notların arasında kaybolmaması gereken spesifik büyük başarılar veya ciddi krizler. Her olay için 2 alan:
+     - \`olay\`: Ne olduğu.
+     - \`etki\`: Olayın somut etkisi (Örn: "Bu durum potansiyel müşteri kaybını engelledi").
+   * \`tekrarlayan_desenler\`: Hata ile alışkanlık arasındaki farkı gösteren tekrarlama frekansları (Örn: "Son 2 haftada 4 kez kasa hatası"). Tekil olayları değil, kronikleşen sorunları veya kalıcı hale gelen başarı alışkanlıklarını (desenleri) listele. Liste boş olabilir.
 
-4. **Aksiyon Planı (\`aksiyon_plani\`):** Raporu okuyan yöneticinin, çalışanıyla yapacağı 1-1 görüşme için 3 bölümlü bir rehber hazırla:
-   * \`takdir_edilecekler\`: (Görüşmede mutlaka övülmesi gereken spesifik başarılar)
-   * \`gelistirilmesi_gerekenler\`: (Görüşmede çözüm odaklı konuşulması gereken spesifik sorunlar)
-   * \`onerilen_eylemler\`: (Bu analize dayanarak önerilen somut adımlar; örn: "Kasa prosedürleri eğitimini yeniden ata", "Satış teknikleri konusunda mentor olarak ata")
+5. **Çift Şapkalı Sentez (\`cift_sapka_degerlendirmesi\`):**
+   * \`yonetici_gozu\`: Sonuç, ciro ve standartlara odaklanan, acımasız ve operasyonel perspektiften çalışanın durumu.
+   * \`ik_gozu\`: Gelişim potansiyeline, empatiye ve stres yönetimine odaklanan insan kaynakları perspektifi.
+   * \`ortak_karar_ozeti\`: İki şapkanın birleştiği nihai 2-3 cümlelik durum özeti.
 
-**ÖNEMLI:** Sadece istenen JSON formatında yanıt ver. Başka bir metin veya açıklama ekleme. JSON formatı:
+6. **1-1 Görüşme Koçluk Rehberi (\`kocluk_rehberi\`):**
+   * \`gundem_maddeleri\`: Görüşmenin masaya yatırılacak, tamamen verinin durumuna ve aciliyetine göre *senin özgürce seçeceğin* en kritik 3 veya 4 madde.
+   * \`kocluk_sorulari\`: Çalışanı savunmaya geçirmeden çözüme ortak edecek 3 adet açık uçlu koçluk sorusu.
+   * \`smart_aksiyon_plani\`: Görüşme sonrasında personelin cebine koyulacak; haftalık veya 30 günlük, somut, ölçülebilir ve zaman kısıtlı eylem adımları dizisi (Örn: "Önümüzdeki 2 hafta boyunca kasa evraklarını çift imza ile teslim etmesi").
 
-{
-  "genel_yonetici_ozeti": "...",
-  "kategori_analizleri": [
-    {
-      "kategori_adi": "1. Müşteri Odaklılık ve Deneyim",
-      "veri_ozeti": {
-        "olumlu": 0,
-        "olumsuz": 0,
-        "notr": 0,
-        "puan_ortalamasi": null
-      },
-      "degerlendirme_notu": "..."
-    }
-  ],
-  "aksiyon_plani": {
-    "takdir_edilecekler": [],
-    "gelistirilmesi_gerekenler": [],
-    "onerilen_eylemler": []
-  }
-}`;
-}
-
-/**
- * Eğilim Desen Analizi Prompt
- */
-export function buildEgilimPrompt(
-  personnelName: string,
-  dateRange: string,
-  dataJSON: string
-): string {
-  return `Sen, İK verilerini analiz eden bir veri analistisin. Görevin, bir çalışanın performans verilerindeki zaman içindeki eğilimleri, kalıpları ve kök nedenleri bulmaktır.
-
-Sana ${personnelName} adlı çalışanın ${dateRange} dönemine ait zaman damgalı tüm notlarını (olumlu/olumsuz/nötr) ve puanlanmış görevlerini (tarih, görev, puan) veriyorum:
-
-${dataJSON}
-
-Bu ham veriyi kullanarak benden istediğim analizi yap:
-
-**Performans Eğilimi (Nicel):** 1-5 arası görev puanlarının zaman içindeki (örn: hafta hafta) eğilimini analiz et. Genel bir artış, düşüş veya istikrar var mı?
-
-**Duygu Eğilimi (Niteliksel):** Olumlu, olumsuz ve nötr notların sıklığının dönem başından sonuna doğru nasıl değiştiğini analiz et.
-
-**Tekrarlayan Desen Analizi (Kök Neden):** Özellikle olumsuz notlarda ve düşük puanlı görevlerde tekrarlanan anahtar kelimeleri, temaları veya konuları (örn: 'kasa açığı', 'müşteri şikayeti') tespit et.
-
-**Korelasyon Analizi (İlişkisel Desen):** Veride ilginç kalıplar ara. (Örn: 'Performans puanları genellikle ayın belirli bir zamanında mı düşüyor?', 'Olumsuz notlar belirli günlerde mi (örn: Cuma) yoğunlaşıyor?')
-
-**Özet İçgörü:** Tüm bu analizden yola çıkarak, bir yöneticinin bilmesi gereken en önemli 1-2 'içgörü'yü (insight) ve kök nedeni belirten bir özet paragraf yaz.
-
-**ÖNEMLI:** Sadece aşağıdaki JSON formatında yanıt ver:
-
-{
-  "performans_egilimi": {
-    "aciklama": "...",
-    "grafik_verisi": [
-      { "tarih": "2025-08-01", "puan": 4.5 }
-    ],
-    "genel_trend": "artan" | "azalan" | "istikrarli"
-  },
-  "duygu_egilimi": {
-    "aciklama": "...",
-    "grafik_verisi": [
-      { "tarih": "2025-08-01", "olumlu": 2, "olumsuz": 1, "notr": 0 }
-    ]
-  },
-  "tekrarlayan_desenler": {
-    "olumsuz_temalar": [
-      { "tema": "kasa açığı", "siklik": 3 }
-    ],
-    "dusuk_puan_temalar": [
-      { "tema": "reyon düzenleme", "siklik": 2 }
-    ]
-  },
-  "korelasyon_analizi": "...",
-  "ozet_icgoru": "..."
-}`;
-}
-
-/**
- * Bütünleşik Analiz Prompt
- */
-export function buildButunlesikPrompt(
-  personnelName: string,
-  dateRange: string,
-  hesaplanmisPuanlar: any,
-  hamNotListesi: string
-): string {
-  return `Sen, perakende sektörü için performans değerlendirmesi yapan, çift rollü bir uzmansın. Sana sunulan veriyi İKİ FARKLI perspektiften analiz edeceksin:
-
-1. **Deneyimli Uzman Yönetici:** Operasyona, sonuca, verimliliğe ve ciroya odaklanır. Net ve talimat vericidir.
-2. **Uzman İK Yetkilisi:** Gelişime, potansiyele, risklere (örn: Halo Etkisi, tükenmişlik) ve şirket kültürüne odaklanır. Analitik ve gelişim odaklıdır.
-
-Sana iki set veri sunacağım:
-1. **\`on_hesaplanmis_puanlar\`:** Benim sistemimin hesapladığı 7 kategorilik sayısal karne.
-2. **\`ham_not_listesi\`:** Çalışanın dönem içindeki tüm olumlu, olumsuz ve nötr notlarının listesi.
-
-**GÖREVİN:**
-Bu iki veri setini kullanarak BİR JSON NESNESİ oluşturmanı istiyorum. Bu nesne 3 ana bölümden oluşmalı: \`yonetici_analizi\`, \`ik_analizi\` ve \`kritik_olaylar\`.
-
-Aşağıdaki veriyi analiz et:
-
-**Çalışan Adı:** ${personnelName}
-**Dönem:** ${dateRange}
-
-**Veri 1: \`on_hesaplanmis_puanlar\` (Sayısal Karne):**
-${JSON.stringify(hesaplanmisPuanlar, null, 2)}
-
-**Veri 2: \`ham_not_listesi\` (Niteliksel Notlar):**
-${hamNotListesi}
-
-**İstenen JSON Çıktısı:**
-
-{
-  "yonetici_analizi": {
-    "baslik": "Deneyimli Uzman Yönetici Gözünden",
-    "yorum": "[Burayı doldur: \`on_hesaplanmis_puanlar\`daki zıtlıklara (örn: 4.8 vs 1.8) odaklan. Operasyonel ve Görsel puanların 'kabul edilemez' olduğunu belirt. Kasa açığı gibi ham notlara atıf yaparak bunun işe/ciroya etkisini (örn: 'para kaybediyoruz') vurgula. Satışların iyi olmasının bu hataları örtemeyeceğini net bir dille ifade et.]",
-    "tavsiyeler": [
-      "[1. Tavsiye: Operasyonel ve Görsel kategoriler için acil yeniden eğitim ata.]",
-      "[2. Tavsiye: Bu hafta spesifik olarak düşük puanlı kategorilerde görev verip puanla.]",
-      "[3. Tavsiye: Görüşmede zamanın %80'ini bu düşük puanlı kategorilere ayır.]"
-    ]
-  },
-  "ik_analizi": {
-    "baslik": "Uzman İK Yetkilisi Gözünden",
-    "yorum": "[Burayı doldur: Bu puan tablosunun 'Düzensiz Uzman' profili olduğunu belirt. Yöneticinin, satış başarısı nedeniyle 'Halo Etkisi'ne girip girmediğini sorgula. Bu dengesizliğin ücretlendirme ve terfi adaletini nasıl bozabileceğini açıkla. Çalışanın potansiyelini kaybetme riskinden bahset.]",
-    "tavsiyeler": [
-      "[1. Tavsiye: Sadece düşük kategorilere odaklanan 30 günlük net bir Performans Gelişim Planı (PDP) hazırla.]",
-      "[2. Tavsiye: Operasyonel puanları yüksek kıdemli bir çalışanla 'mentor' olarak eşleştir.]",
-      "[3. Tavsiye: Yöneticisiyle, iyi satışların temel prosedür hatalarını affettirmeyeceği konusunda bir 'kalibrasyon' görüşmesi yap.]"
-    ]
-  },
-  "kritik_olaylar": {
-    "baslik": "Kritik Olaylar Listesi (Geri Bildirim Görüşmesi İçin)",
-    "basarilar": [
-      "[Burayı doldur: \`ham_not_listesi\` içinden en etkileyici 2-3 OLUMLU notu filtrele. Sadece notun içeriğini değil, bunun neden kritik olduğunu belirten kısa bir özet yaz.]"
-    ],
-    "gelisim_alanlari": [
-      "[Burayı doldur: \`ham_not_listesi\` içinden en kritik 2-3 OLUMSUZ notu filtrele. Özellikle tekrarlayan veya işi durduran olayları seç ve özetle.]"
-    ]
-  }
-}
-
-**ÖNEMLI:** Sadece JSON formatında yanıt ver. Başka açıklama ekleme.`;
+**ÖNEMLİ KURALLAR:**
+- Yanıt SADECE geçerli bir JSON nesnesi olmalıdır.
+- JSON formatı dışında hiçbir giriş/çıkış metni, markdown (örneğin \`\`\`json) KULLANMA. Doğrudan süslü parantez ile başla ve bitir.
+- Puanlamalarda Checklist puanlarını (0-100) 1-5 aralığına uygun şekilde dönüştürerek diğer not ve görev puanlarıyla harmanlamayı unutma.
+`;
 }
