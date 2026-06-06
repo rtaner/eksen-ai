@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
+import { useAuth } from '@/lib/contexts/AuthContext';
 import Input from '@/components/ui/Input';
 import Button from '@/components/ui/Button';
 import type { RegisterFormData } from '@/lib/types';
@@ -11,6 +12,7 @@ export default function RegisterForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const supabase = createClient();
+  const { refreshAuth } = useAuth();
 
   const [formData, setFormData] = useState<RegisterFormData>({
     name: '',
@@ -166,6 +168,9 @@ export default function RegisterForm() {
       // Name sync is also handled automatically when profile is updated
 
       // Default permissions are created automatically via database trigger
+
+      // Sync auth state explicitly so the user is fully logged in before redirecting
+      await refreshAuth();
 
       // Redirect based on whether user created new org or joined existing
       if (formData.inviteCode?.trim()) {

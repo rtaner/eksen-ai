@@ -40,7 +40,7 @@
 
 'use client';
 
-import { createContext, useContext, useState, useEffect, useMemo, useCallback } from 'react';
+import { createContext, useContext, useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { User } from '@supabase/supabase-js';
 import { createClient } from '@/lib/supabase/client';
 import type { Profile, Organization } from '@/lib/types';
@@ -136,8 +136,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
   // Auth state
   const [state, setState] = useState<AuthState>(initialState);
 
+  // Use a ref to track the latest fetch and avoid race conditions
+  const fetchIdRef = useRef(0);
+
   // Load user data (profile + organization)
   const loadUserData = useCallback(async (user: User) => {
+    const currentFetchId = ++fetchIdRef.current;
     const startTime = performance.now();
     try {
       // Optimization: Eğer zaten bu kullanıcı yüklüyse tekrar yükleme
@@ -150,19 +154,36 @@ export function AuthProvider({ children }: AuthProviderProps) {
       console.log('[AuthContext] Starting auth data fetch...');
       console.log('[AuthContext] User ID:', user.id);
       
-      // 1. Fetch profile with timeout
+      // 1. Fetch profile with timeout and retry logic
       console.log('[AuthContext] Fetching profile...');
       const profileResult = await fetchWithTimeout(
         async () => {
-          const result = await supabase
-            .from('profiles')
-            .select('*')
-            .eq('id', user.id)
-            .single();
-          return result;
+          let retries = 3;
+          let lastResult;
+          
+          while (retries >= 0) {
+            const result = await supabase
+              .from('profiles')
+              .select('*')
+              .eq('id', user.id)
+              .single();
+              
+            // PGRST116 means 0 rows found (profile not created yet)
+            if (result.error && result.error.code === 'PGRST116' && retries > 0) {
+              console.log(`[AuthContext] Profile not found, retrying... (${retries} attempts left)`);
+              await new Promise(resolve => setTimeout(resolve, 800));
+              retries--;
+              continue;
+            }
+            
+            lastResult = result;
+            break;
+          }
+          
+          return lastResult || { data: null, error: new Error('Profile fetch failed') };
         },
-        1000, // 1 saniye timeout
-        'Profil bilgileri yüklenirken zaman aşımı (1 saniye)'
+        5000, // 5 saniye timeout (retry'lar için daha uzun süre)
+        'Profil bilgileri yüklenirken zaman aşımı (5 saniye)'
       );
 
       const { data: profile, error: profileError } = profileResult;
@@ -191,14 +212,16 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
       if (orgError) throw orgError;
 
-      // Update state atomically
-      setState({
-        user,
-        profile,
-        organization,
-        loading: false,
-        error: null,
-      });
+      // Only update state if this is still the most recent fetch
+      if (currentFetchId === fetchIdRef.current) {
+        setState({
+          user,
+          profile,
+          organization,
+          loading: false,
+          error: null,
+        });
+      }
 
       const endTime = performance.now();
       const duration = endTime - startTime;
@@ -213,13 +236,15 @@ export function AuthProvider({ children }: AuthProviderProps) {
       
       console.error(`[AuthContext] ❌ Error loading user data (${duration.toFixed(2)}ms):`, error instanceof Error ? error : JSON.stringify(error));
       
-      // Set error state
-      setState(prev => ({
-        ...prev,
-        user, // User var ama profil yoksa yine de user kalsın
-        loading: false,
-        error: error instanceof Error ? error.message : ERROR_MESSAGES.PROFILE_FETCH_ERROR,
-      }));
+      // Set error state only if this is still the most recent fetch
+      if (currentFetchId === fetchIdRef.current) {
+        setState(prev => ({
+          ...prev,
+          user, // User var ama profil yoksa yine de user kalsın
+          loading: false,
+          error: error instanceof Error ? error.message : ERROR_MESSAGES.PROFILE_FETCH_ERROR,
+        }));
+      }
     }
   }, [supabase, state.profile, state.user?.id]);
 
@@ -274,11 +299,22 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   // Refresh auth data
   const refreshAuth = useCallback(async () => {
-    if (state.user) {
-      setState(prev => ({ ...prev, loading: true }));
-      await loadUserData(state.user);
+    console.log('[AuthContext] Explicit refreshAuth called');
+    setState(prev => ({ ...prev, loading: true }));
+    const { data } = await supabase.auth.getSession();
+    
+    if (data.session?.user) {
+      await loadUserData(data.session.user);
+    } else {
+      setState({
+        user: null,
+        profile: null,
+        organization: null,
+        loading: false,
+        error: null,
+      });
     }
-  }, [state.user, loadUserData]);
+  }, [supabase, loadUserData]);
 
   // Listen to auth state changes
   // onAuthStateChange otomatik olarak mevcut session'ı kontrol eder ve INITIAL_SESSION event'i tetikler
