@@ -8,6 +8,7 @@ import Button from '@/components/ui/Button';
 interface TaskFormProps {
   personnelId: string;
   editingTask?: Task | null;
+  initialDescription?: string;
   onSuccess?: () => void;
   onCancel?: () => void;
 }
@@ -24,11 +25,12 @@ const getTodayLocalDate = () => {
 export default function TaskForm({
   personnelId,
   editingTask,
+  initialDescription,
   onSuccess,
   onCancel,
 }: TaskFormProps) {
   const supabase = createClient();
-  const [description, setDescription] = useState(editingTask?.description || '');
+  const [description, setDescription] = useState(initialDescription || editingTask?.description || '');
   const [deadline, setDeadline] = useState(
     editingTask?.deadline || getTodayLocalDate()
   );
