@@ -8,6 +8,8 @@ export interface RawStoreDataRow {
   StoreSalesPct: number; // Sales Amount %
   RegionSalesPct: number; // Region Sales %
   SalesAmountLFLPct: number; // Büyüme (Sales Amount LFL %)
+  StockQtyLFLPct?: number; // Stok Adet Büyümesi
+  SalesQuantityLFLPct?: number; // Satış Adet Büyümesi
   Cover: number; // Stok Devir Hızı
   OnWay: number; // Yoldaki Ürün
   NetFinalOccupancyPct: number; // Kapasite %
@@ -22,8 +24,13 @@ export interface AnalysisInsight {
 }
 
 export interface DeepInsight {
-  diagnosis: string;
-  action: string;
+  main_finding: string;
+  scenarios: Array<{
+    title: string;
+    probability: number;
+    description: string;
+  }>;
+  validation_task: string;
 }
 
 export interface ClassNode extends RawStoreDataRow {
@@ -74,6 +81,8 @@ export interface ProcessedStoreDashboard {
   storeMetrics?: StoreMetrics;
   totalSales: number;
   generatedAt: string;
+  analysisType?: 'strict' | 'free';
+  storeAverageCover?: number;
 }
 
 /**
@@ -158,6 +167,17 @@ export function processStoreData(rawRows: any[]): ProcessedStoreDashboard {
   let totalSales = 0;
   const deptMap = new Map<string, DepartmentNode>();
 
+  let totalCover = 0;
+  let coverCount = 0;
+  for (const raw of rawRows) {
+    const c = Number(raw.Cover || raw.cover || 0);
+    if (c > 0) {
+      totalCover += c;
+      coverCount++;
+    }
+  }
+  const storeAverageCover = coverCount > 0 ? totalCover / coverCount : 0;
+
   let lastDept = 'Bilinmeyen Departman';
 
   for (const raw of rawRows) {
@@ -191,6 +211,8 @@ export function processStoreData(rawRows: any[]): ProcessedStoreDashboard {
       StoreSalesPct: Number(raw.StoreSalesPct || raw.storeSalesPct || 0),
       RegionSalesPct: Number(raw.RegionSalesPct || raw.regionSalesPct || 0),
       SalesAmountLFLPct: Number(raw.SalesAmountLFLPct || raw.salesAmountLFLPct || 0),
+      StockQtyLFLPct: Number(raw.StockQtyLFLPct || raw.stockQtyLFLPct || 0),
+      SalesQuantityLFLPct: Number(raw.SalesQuantityLFLPct || raw.salesQuantityLFLPct || 0),
       Cover: Number(raw.Cover || raw.cover || 0),
       OnWay: Number(raw.OnWay || raw.onWay || 0),
       NetFinalOccupancyPct: Number(raw.NetFinalOccupancyPct || raw.netFinalOccupancyPct || 0),
@@ -249,51 +271,74 @@ export function processStoreData(rawRows: any[]): ProcessedStoreDashboard {
   return {
     departments: Array.from(deptMap.values()),
     totalSales,
-    generatedAt: new Date().toISOString()
+    generatedAt: new Date().toISOString(),
+    storeAverageCover
   };
 }
 
-export function getPreProcessedDeltas(node: RawStoreDataRow, type: string) {
-  // Pazar Durumu (Mağaza Pct vs Bölge Pct)
-  const marketShareDiff = node.StoreSalesPct - node.RegionSalesPct;
-  let pazar_durumu = "Bölge ile aynı seviyede";
-  if (marketShareDiff > 1) {
-    pazar_durumu = `Bölgenin %${marketShareDiff.toFixed(1)} ilerisinde`;
-  } else if (marketShareDiff < -1) {
-    pazar_durumu = `Bölgenin %${Math.abs(marketShareDiff).toFixed(1)} gerisinde`;
+export function getPreProcessedDeltas(node: RawStoreDataRow, type: string, storeAverageCover: number = 0) {
+  // Katman 1: Tetikleyiciler (Triggers)
+  let priority = 99;
+  let triggerTag = "";
+  let triggerDesc = "";
+
+  const salesLFL = node.SalesAmountLFLPct || 0;
+  const stockQtyLFL = node.StockQtyLFLPct || 0;
+  const salesQtyLFL = node.SalesQuantityLFLPct || 0;
+  
+  if (salesLFL - stockQtyLFL < -10) {
+    priority = 1;
+    triggerTag = "[OPERASYONEL_KAYIP]";
+    triggerDesc = "Satış düşüşü stok daralmasından daha sert.";
+  } else if (salesLFL < 0 && stockQtyLFL < 0 && node.Cover < 5 && node.OnWay === 0) {
+    priority = 2;
+    triggerTag = "[YOK_SATMA_RISKI]";
+    triggerDesc = "Satamıyoruz çünkü mal bitti ve yolda mal yok.";
+  } else if (salesLFL - salesQtyLFL < -15) {
+    priority = 3;
+    triggerTag = "[MARJ_BASKISI]";
+    triggerDesc = "Adet satıyor ama ciro gelmiyor (sepet şişiyor, marj düşüyor).";
+  } else if (salesLFL > 30 && stockQtyLFL > 0 && storeAverageCover > 0 && node.Cover < storeAverageCover) {
+    priority = 4;
+    triggerTag = "[GIZLI_SAMPIYON]";
+    triggerDesc = "Mağaza ortalamasından hızlı büyüyor ve dönüyor.";
+  } else {
+    triggerTag = "[NÖTR]";
+    triggerDesc = "Spesifik bir tetikleyici alarm üretmedi.";
   }
 
-  // Büyüme Trendi (LFL)
-  let buyume_trendi = "Durağan (Büyüme yok)";
-  if (node.SalesAmountLFLPct > 5) {
-    buyume_trendi = `Pozitif (Geçen seneye göre +%${node.SalesAmountLFLPct.toFixed(1)})`;
-  } else if (node.SalesAmountLFLPct < -5) {
-    buyume_trendi = `Negatif (Geçen seneye göre -%${Math.abs(node.SalesAmountLFLPct).toFixed(1)})`;
-  }
+  // Katman 2: Bağlam ve Eşik Etiketleri (Context)
+  const spaceScore = (node.StoreSalesPct || 0) - (node.NetFinalOccupancyPct || 0);
+  let spaceLabel = "";
+  if (spaceScore > 5) spaceLabel = "[GİZLİ KAHRAMAN]";
+  else if (spaceScore > 2) spaceLabel = "[DENGELİ - POZİTİF]";
+  else if (spaceScore > -2) spaceLabel = "[NÖTR]";
+  else if (spaceScore > -5) spaceLabel = "[VERİMSİZ]";
+  else spaceLabel = "[ALAN ASALAĞI]";
 
-  // Stok Hızı (Cover)
-  let stok_hizi = "Normal Seyrinde";
-  if (node.Cover > 0 && node.Cover < 8) {
-    stok_hizi = `Çok Hızlı / Riskli (Cover: ${node.Cover})`;
-  } else if (node.Cover > 10) {
-    stok_hizi = `Yavaş (Cover: ${node.Cover}, idealin üstünde)`;
-  }
-
-  // Reyon Durumu (Occupancy)
-  let reyon_durumu = "İdeal Seviye";
-  if (node.NetFinalOccupancyPct > 120) {
-    reyon_durumu = `Aşırı Şişkin (Occupancy: %${node.NetFinalOccupancyPct.toFixed(1)})`;
-  } else if (node.NetFinalOccupancyPct < 80) {
-    reyon_durumu = `Eksik / Seyrek (Occupancy: %${node.NetFinalOccupancyPct.toFixed(1)})`;
-  }
+  const marketGap = (node.StoreSalesPct || 0) - (node.RegionSalesPct || 0);
+  const velocityDev = storeAverageCover > 0 ? ((node.Cover || 0) / storeAverageCover).toFixed(2) : "Bilinmiyor";
 
   return {
     id: `${node.Department}-${type}-${node.Name}`,
-    urun: node.Name || "Bilinmeyen Ürün",
-    pazar_durumu,
-    buyume_trendi,
-    stok_hizi,
-    reyon_durumu,
-    yoldaki_urun_adet: node.OnWay || 0
+    category_name: node.Name || "Bilinmeyen Ürün",
+    trigger: {
+      priority,
+      tag: triggerTag,
+      description: triggerDesc
+    },
+    context: {
+      space_opportunity: {
+        score: spaceScore.toFixed(1),
+        label: spaceLabel
+      },
+      market_power_gap: marketGap.toFixed(1),
+      velocity_deviation: velocityDev,
+      current_cover: node.Cover,
+      on_way_qty: node.OnWay,
+      sales_lfl_pct: salesLFL,
+      stock_qty_lfl_pct: stockQtyLFL,
+      sales_qty_lfl_pct: salesQtyLFL
+    }
   };
 }

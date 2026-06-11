@@ -6,15 +6,26 @@ import LifestyleAccordion from './LifestyleAccordion';
 
 type TabType = 'lifestyles' | 'classes' | 'buyers';
 
-interface StoreAnalysisClientProps {
-  initialData: ProcessedStoreDashboard | null;
-  isOwner: boolean;
-  lastUpdate?: string;
+interface AnalysisRecord {
+  dashboard_data: ProcessedStoreDashboard;
+  created_at: string;
 }
 
-export default function StoreAnalysisClient({ initialData, isOwner, lastUpdate }: StoreAnalysisClientProps) {
-  const [data, setData] = useState<ProcessedStoreDashboard | null>(initialData);
+interface StoreAnalysisClientProps {
+  historyAnalyses: AnalysisRecord[];
+  isOwner: boolean;
+}
+
+export default function StoreAnalysisClient({ historyAnalyses, isOwner }: StoreAnalysisClientProps) {
+  const [analyses, setAnalyses] = useState<AnalysisRecord[]>(historyAnalyses);
+  const [selectedIndex, setSelectedIndex] = useState(0);
+  
+  const currentAnalysis = analyses[selectedIndex];
+  const data = currentAnalysis?.dashboard_data || null;
+  const lastUpdate = currentAnalysis?.created_at || null;
+  
   const [isUploading, setIsUploading] = useState(false);
+  const [progressMsg, setProgressMsg] = useState<string>('');
   const [selectedDept, setSelectedDept] = useState<string | null>(data?.departments[0]?.name || null);
   const [activeTab, setActiveTab] = useState<TabType>('lifestyles');
   const [openLifestyleIdx, setOpenLifestyleIdx] = useState<number | null>(null);
@@ -42,33 +53,101 @@ export default function StoreAnalysisClient({ initialData, isOwner, lastUpdate }
     if (!file) return;
 
     setIsUploading(true);
+    setProgressMsg('Adım 1/4: Okunuyor ve sınıflandırılıyor...');
+    
     const formData = new FormData();
     formData.append('file', file);
 
     try {
-      const response = await fetch('/api/store-analysis/upload', {
+      // Step 1: Extract
+      const step1Res = await fetch('/api/store-analysis/step1-extract', {
         method: 'POST',
         body: formData,
       });
+      if (!step1Res.ok) throw new Error('Adım 1 başarısız');
+      const step1Data = await step1Res.json();
+      if (!step1Data.success) throw new Error(step1Data.error);
+      
+      const { dashboardData, prevTriggers } = step1Data.data;
 
-      if (!response.ok) {
-        throw new Error('Upload failed');
-      }
+      // Step 2: Deep Insight (Woman)
+      setProgressMsg('Adım 2/4: Kadın reyonu analiz ediliyor...');
+      const step2WomanRes = await fetch('/api/store-analysis/step2-deep-insight', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ dashboardData, prevTriggers, target: 'woman' }),
+      });
+      const step2WomanData = step2WomanRes.ok ? await step2WomanRes.json() : {};
+      const womanInsights = step2WomanData.parsedInsights || {};
 
-      const result = await response.json();
-      if (result.success && result.data) {
-        setData(result.data.dashboard_data);
-        if (!selectedDept && result.data.dashboard_data.departments.length > 0) {
-          setSelectedDept(result.data.dashboard_data.departments[0].name);
+      // Step 3: Deep Insight (Man)
+      setProgressMsg('Adım 3/4: Erkek reyonu analiz ediliyor...');
+      const step3ManRes = await fetch('/api/store-analysis/step2-deep-insight', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ dashboardData, prevTriggers, target: 'man' }),
+      });
+      const step3ManData = step3ManRes.ok ? await step3ManRes.json() : {};
+      const manInsights = step3ManData.parsedInsights || {};
+
+      // Step 4: Deep Insight (Other)
+      setProgressMsg('Adım 4/4: Diğer reyonlar analiz ediliyor...');
+      const step4OtherRes = await fetch('/api/store-analysis/step2-deep-insight', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ dashboardData, prevTriggers, target: 'other' }),
+      });
+      const step4OtherData = step4OtherRes.ok ? await step4OtherRes.json() : {};
+      const otherInsights = step4OtherData.parsedInsights || {};
+
+      // Merge insights
+      setProgressMsg('Sonuçlar kaydediliyor...');
+      const allInsights = { ...womanInsights, ...manInsights, ...otherInsights };
+      
+      dashboardData.departments.forEach((dept: any) => {
+        (dept.lifestyles || []).forEach((ls: any) => {
+          const id = `${dept.name}-Lifestyle-${ls.name}`;
+          if (allInsights[id]) ls.deepInsight = allInsights[id];
+        });
+        (dept.classes || []).forEach((cls: any) => {
+          const id = `${dept.name}-Class-${cls.name}`;
+          if (allInsights[id]) cls.deepInsight = allInsights[id];
+        });
+        (dept.buyers || []).forEach((buyer: any) => {
+          const id = `${dept.name}-Buyer-${buyer.name}`;
+          if (allInsights[id]) buyer.deepInsight = allInsights[id];
+        });
+      });
+
+      // Save
+      const saveRes = await fetch('/api/store-analysis/step3-save', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ dashboardData }),
+      });
+      if (!saveRes.ok) throw new Error('Kayıt Başarısız');
+      const saveData = await saveRes.json();
+
+      if (saveData.success && saveData.data) {
+        const newRecord = {
+          dashboard_data: saveData.data.dashboard_data,
+          created_at: saveData.data.created_at
+        };
+        const updatedAnalyses = [newRecord, ...analyses].slice(0, 3);
+        setAnalyses(updatedAnalyses);
+        setSelectedIndex(0);
+
+        if (!selectedDept && saveData.data.dashboard_data.departments.length > 0) {
+          setSelectedDept(saveData.data.dashboard_data.departments[0].name);
         }
         alert('🎉 Rapor başarıyla yapay zeka tarafından analiz edildi ve veriler güncellendi!');
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error uploading file:', error);
-      alert('Dosya yüklenirken bir hata oluştu.');
+      alert('Dosya yüklenirken bir hata oluştu: ' + error.message);
     } finally {
       setIsUploading(false);
-      // Reset input
+      setProgressMsg('');
       if (e.target) e.target.value = '';
     }
   };
@@ -87,24 +166,14 @@ export default function StoreAnalysisClient({ initialData, isOwner, lastUpdate }
         </p>
         
         {isOwner && (
-          <div className="mt-6">
-            <label className="cursor-pointer inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors shadow-sm">
-              {isUploading ? (
-                <span className="flex items-center">
-                  <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                  </svg>
-                  Yükleniyor ve Analiz Ediliyor...
-                </span>
-              ) : (
-                <span className="flex items-center">
-                  <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
-                  </svg>
-                  Yeni Rapor Yükle
-                </span>
-              )}
+          <div className="mt-6 flex justify-center">
+            <label className="cursor-pointer inline-flex justify-center items-center px-6 py-3 bg-blue-600 text-white font-medium rounded-xl hover:bg-blue-700 transition-colors shadow-sm">
+              <span className="flex items-center">
+                <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                </svg>
+                {isUploading ? (progressMsg || 'Analiz Ediliyor...') : 'Yeni Veri Yükle ve Analiz Et'}
+              </span>
               <input 
                 type="file" 
                 className="hidden" 
@@ -124,37 +193,40 @@ export default function StoreAnalysisClient({ initialData, isOwner, lastUpdate }
   return (
     <div className="space-y-6">
       {/* Top Header & Upload Button */}
-      <div className="flex justify-between items-center">
-        <div className="text-sm text-gray-500">
-          Son Güncelleme: {lastUpdate ? new Date(lastUpdate).toLocaleString('tr-TR') : 'Bilinmiyor'}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-gray-500 font-medium">Analiz Geçmişi:</span>
+          <select 
+            value={selectedIndex}
+            onChange={(e) => setSelectedIndex(Number(e.target.value))}
+            className="border border-gray-200 rounded-lg p-2 text-sm text-gray-700 bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
+          >
+            {analyses.map((a, idx) => (
+              <option key={idx} value={idx}>
+                {new Date(a.created_at).toLocaleString('tr-TR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
+              </option>
+            ))}
+          </select>
         </div>
         
         {isOwner && (
-          <label className="cursor-pointer inline-flex items-center px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors shadow-sm text-sm font-medium">
-            {isUploading ? (
+          <div className="flex">
+            <label className="cursor-pointer inline-flex items-center px-4 py-2 bg-blue-600 border border-transparent text-white rounded-lg hover:bg-blue-700 transition-colors shadow-sm text-sm font-medium">
               <span className="flex items-center">
-                <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-gray-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                </svg>
-                İşleniyor...
-              </span>
-            ) : (
-              <span className="flex items-center">
-                <svg className="w-4 h-4 mr-2 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
                 </svg>
-                Veri Güncelle
+                {isUploading ? (progressMsg || 'Analiz Ediliyor...') : 'Yeni Yükle'}
               </span>
-            )}
-            <input 
-              type="file" 
-              className="hidden" 
-              accept=".json,.xlsx,.xls,.pdf" 
-              onChange={handleFileUpload}
-              disabled={isUploading}
-            />
-          </label>
+              <input 
+                type="file" 
+                className="hidden" 
+                accept=".json,.xlsx,.xls,.pdf" 
+                onChange={handleFileUpload}
+                disabled={isUploading}
+              />
+            </label>
+          </div>
         )}
       </div>
 

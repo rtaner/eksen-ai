@@ -39,9 +39,9 @@ export default function LifestyleAccordion({ node, isClass = false, isOpen: cont
 
   const nodeName = node.name || (isClass ? 'Bilinmeyen Sınıf' : 'Belirtilmemiş Yaşam Tarzı');
   
-  const diagnosisText = node.deepInsight?.diagnosis || node.insight.diagnosis;
-  const actionText = node.deepInsight?.action || node.insight.action;
-  const defaultTaskDescription = `${nodeName} (${node.insight.warning}): ${diagnosisText} ${actionText}`;
+  const mainFinding = node.deepInsight?.main_finding || node.insight.diagnosis;
+  const validationTask = node.deepInsight?.validation_task || node.insight.action;
+  const defaultTaskDescription = `${nodeName} (${node.insight.warning}): ${mainFinding} -> Saha Görevi: ${validationTask}`;
 
   return (
     <div className={`bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden transition-all duration-200 ${isOpen && !isClass ? 'ring-2 ring-blue-500/50' : ''}`}>
@@ -114,32 +114,58 @@ export default function LifestyleAccordion({ node, isClass = false, isOpen: cont
           {/* AI Insight Box */}
           <div className={`p-5 rounded-xl border ${statusColor.replace('text', 'border').replace('bg', 'bg').replace('-600', '-200')} mb-4 flex flex-col md:flex-row gap-4 items-start md:items-center justify-between`}>
             <div>
-              <h4 className="font-bold flex items-center gap-2 mb-2">
+              <h4 className="font-bold flex items-center gap-2 mb-4">
                 {node.insight.status === 'red' ? '⚠️' : node.insight.status === 'green' ? '🌟' : 'ℹ️'}
                 {node.insight.warning}
               </h4>
               {node.deepInsight ? (
-                <>
-                  <div className="mb-3">
-                    <span className="font-bold text-xs uppercase tracking-wider text-gray-500 mb-1 block">🔍 Teşhis</span>
-                    <p className="text-sm text-gray-800 leading-relaxed">{node.deepInsight.diagnosis}</p>
+                <div className="flex flex-col gap-4 w-full">
+                  <div className="bg-white/60 p-4 rounded-lg border border-gray-100">
+                    <span className="font-bold text-xs uppercase tracking-wider text-gray-500 mb-2 block">📊 Ana Tespit</span>
+                    <p className="text-sm font-semibold text-gray-900 leading-relaxed">{node.deepInsight.main_finding}</p>
                   </div>
-                  <div>
-                    <span className="font-bold text-xs uppercase tracking-wider text-blue-600 mb-1 block">🎯 Aksiyon Önerisi</span>
-                    <p className="text-sm text-gray-800 leading-relaxed">{node.deepInsight.action}</p>
+                  
+                  {node.deepInsight.scenarios && node.deepInsight.scenarios.length > 0 && (
+                    <div className="bg-white/60 p-4 rounded-lg border border-gray-100">
+                      <span className="font-bold text-xs uppercase tracking-wider text-gray-500 mb-3 block">🔍 Muhtemel Senaryolar</span>
+                      <div className="flex flex-col gap-3">
+                        {node.deepInsight.scenarios.map((scenario: any, idx: number) => (
+                          <div key={idx} className="flex gap-3 items-start">
+                            <div className="shrink-0 w-12 h-12 flex flex-col items-center justify-center rounded-lg bg-blue-50 border border-blue-100">
+                              <span className="text-sm font-bold text-blue-700">%{scenario.probability}</span>
+                            </div>
+                            <div>
+                              <h5 className="font-semibold text-sm text-gray-900">{scenario.title}</h5>
+                              <p className="text-xs text-gray-600 mt-0.5">{scenario.description}</p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="bg-blue-50/50 p-4 rounded-lg border border-blue-100">
+                    <span className="font-bold text-xs uppercase tracking-wider text-blue-700 mb-2 block">🎯 Saha Doğrulama Görevi</span>
+                    <p className="text-sm text-gray-800 leading-relaxed font-medium">{node.deepInsight.validation_task}</p>
                   </div>
-                </>
+                </div>
               ) : (
-                <>
-                  <p className="text-sm mt-2"><strong>Teşhis:</strong> {node.insight.diagnosis}</p>
-                  <p className="text-sm mt-1"><strong>Aksiyon:</strong> {node.insight.action}</p>
-                </>
+                <div className="flex flex-col gap-3 mt-2">
+                  <div className="bg-white/60 p-3 rounded-lg border border-gray-100">
+                    <span className="font-bold text-[10px] uppercase tracking-wider text-gray-500 mb-1 block">Teşhis</span>
+                    <p className="text-sm text-gray-800">{node.insight.diagnosis}</p>
+                  </div>
+                  <div className="bg-white/60 p-3 rounded-lg border border-gray-100">
+                    <span className="font-bold text-[10px] uppercase tracking-wider text-blue-600 mb-1 block">Aksiyon</span>
+                    <p className="text-sm text-gray-800">{node.insight.action}</p>
+                  </div>
+                </div>
               )}
             </div>
             
             <button 
               onClick={() => setIsTaskModalOpen(true)}
-              className="shrink-0 flex items-center px-4 py-2 bg-gray-900 text-white rounded-lg text-sm font-medium hover:bg-gray-800 transition-colors shadow-sm whitespace-nowrap"
+              className="shrink-0 flex items-center px-4 py-2 bg-gray-900 text-white rounded-lg text-sm font-medium hover:bg-gray-800 transition-colors shadow-sm whitespace-nowrap mt-4 md:mt-0"
             >
               <svg className="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />

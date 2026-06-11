@@ -24,15 +24,14 @@ export default async function StoreAnalysisPage() {
     redirect('/');
   }
 
-  // Fetch the latest completed store analysis for this organization
-  const { data: latestAnalysis } = await supabase
+  // Fetch the latest 3 completed store analyses for this organization
+  const { data: latestAnalyses } = await supabase
     .from('store_analyses')
     .select('dashboard_data, created_at')
     .eq('organization_id', profile.organization_id)
     .eq('status', 'completed')
     .order('created_at', { ascending: false })
-    .limit(1)
-    .single();
+    .limit(3);
 
   return (
     <div className="space-y-6">
@@ -46,9 +45,8 @@ export default async function StoreAnalysisPage() {
       </div>
 
       <StoreAnalysisClient 
-        initialData={latestAnalysis?.dashboard_data || null} 
+        historyAnalyses={latestAnalyses || []} 
         isOwner={profile.role === 'owner'}
-        lastUpdate={latestAnalysis?.created_at}
       />
     </div>
   );

@@ -58,60 +58,61 @@ export async function POST(request: NextRequest) {
       }
 
       const base64Data = buffer.toString('base64');
-      const prompt = `Extract data from this store dashboard PDF and return a JSON object with two keys: "storeMetrics" and "rows".
-1. "storeMetrics": Extract the overall store metrics from the top sections (Sales Amount, Sales Amount LY %, Sales Quantity, Sales Quantity LY %, Cover, Conversion, IPT, ATV, FOOTFALL, Unit Price). Map them to this exact schema: { "SalesAmount": number, "SalesAmountLYPct": number, "SalesQuantity": number, "SalesQuantityLYPct": number, "Cover": number, "ConversionPct": number, "IPT": number, "ATV": number, "Footfall": number, "UnitPrice": number }. For example, if you see %51,5, return 51.5. If you see 1.578.696, return 1578696. If missing, return 0.
-2. "rows": Extract the tabular data containing 'Departments' (e.g. WOMAN, MAN totals), 'Groups' (or Lifestyles) like Casual, Young, 'Classes' like Trousers, Shirts, and 'Buyers' (or Sub-Categories like Woven Top, Knitted). Extract ALL of these rows as separate objects in an array. Schema: { "Department": "string (e.g. WOMAN, MAN)", "RowType": "string ('Department', 'Lifestyle', 'Class' or 'Buyer')", "Name": "string", "StoreSalesPct": number, "RegionSalesPct": number, "SalesAmountLFLPct": number, "Cover": number, "OnWay": number, "NetFinalOccupancyPct": number, "SalesAmount": number }.
-Return ONLY the raw JSON object, without any markdown blocks or explanation.`;
+      
+      const metricsPrompt = `Extract the overall store metrics from the top sections of this dashboard PDF (Sales Amount, Sales Amount LY %, Sales Quantity, Sales Quantity LY %, Cover, Conversion, IPT, ATV, FOOTFALL, Unit Price). Map them to this exact schema: { "SalesAmount": number, "SalesAmountLYPct": number, "SalesQuantity": number, "SalesQuantityLYPct": number, "Cover": number, "ConversionPct": number, "IPT": number, "ATV": number, "Footfall": number, "UnitPrice": number }. For example, if you see %51,5, return 51.5. If you see 1.578.696, return 1578696. If missing, return 0. Return ONLY the raw JSON object, without any markdown blocks or explanation.`;
 
-      const response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${apiKey}`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            contents: [
-              {
-                parts: [
-                  { text: prompt },
-                  {
-                    inlineData: {
-                      mimeType: 'application/pdf',
-                      data: base64Data,
-                    },
-                  },
-                ],
-              },
-            ],
-            generationConfig: {
-              temperature: 0.1,
-              responseMimeType: "application/json",
-            },
-          }),
-        }
-      );
+      const rowsPrompt = `Extract the tabular data from this store dashboard PDF into a JSON array of objects. The PDF contains rows representing 'Departments' (e.g. WOMAN, MAN totals), 'Groups' (or Lifestyles) like Casual, Young, 'Classes' like Trousers, Shirts, and 'Buyers' (or Sub-Categories like Woven Top, Knitted). Extract ALL of these rows as separate objects in the array. Do not summarize or truncate the list. Map the values to this exact schema: { "Department": "string", "RowType": "string", "Name": "string", "StoreSalesPct": number, "RegionSalesPct": number, "SalesAmountLFLPct": number, "StockQtyLFLPct": number, "SalesQuantityLFLPct": number, "Cover": number, "OnWay": number, "NetFinalOccupancyPct": number, "SalesAmount": number }. For percentage values, extract them as numbers (e.g., %25.5 -> 25.5). If missing or "Boş", use 0. Return ONLY the raw JSON array, without any markdown blocks or explanation.`;
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        console.error('Gemini API Error:', errorData);
+      const [metricsResponse, rowsResponse] = await Promise.all([
+        fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${apiKey}`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              contents: [{ parts: [{ text: metricsPrompt }, { inlineData: { mimeType: 'application/pdf', data: base64Data } }] }],
+              generationConfig: { temperature: 0.1, responseMimeType: "application/json" },
+            }),
+          }
+        ),
+        fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${apiKey}`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              contents: [{ parts: [{ text: rowsPrompt }, { inlineData: { mimeType: 'application/pdf', data: base64Data } }] }],
+              generationConfig: { temperature: 0.1, responseMimeType: "application/json" },
+            }),
+          }
+        )
+      ]);
+
+      if (!metricsResponse.ok || !rowsResponse.ok) {
+        console.error('Gemini API Error - Metrics:', await metricsResponse.text(), 'Rows:', await rowsResponse.text());
         return NextResponse.json({ error: 'Failed to extract data from PDF using AI' }, { status: 500 });
       }
 
-      const data = await response.json();
-      let text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+      const metricsData = await metricsResponse.json();
+      const rowsData = await rowsResponse.json();
+
+      let metricsText = metricsData.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
+      let rowsText = rowsData.candidates?.[0]?.content?.parts?.[0]?.text || '[]';
       
-      if (text.startsWith('```json')) text = text.replace(/^```json\\s*/, '').replace(/```\\s*$/, '');
-      else if (text.startsWith('```')) text = text.replace(/^```\\s*/, '').replace(/```\\s*$/, '');
+      if (metricsText.startsWith('```json')) metricsText = metricsText.replace(/^```json\s*/, '').replace(/```\s*$/, '');
+      else if (metricsText.startsWith('```')) metricsText = metricsText.replace(/^```\s*/, '').replace(/```\s*$/, '');
+
+      if (rowsText.startsWith('```json')) rowsText = rowsText.replace(/^```json\s*/, '').replace(/```\s*$/, '');
+      else if (rowsText.startsWith('```')) rowsText = rowsText.replace(/^```\s*/, '').replace(/```\s*$/, '');
 
       try {
-        const parsed = JSON.parse(text);
-        if (Array.isArray(parsed)) {
-          rawRows = parsed;
-        } else {
-          rawRows = parsed.rows || [];
-          storeMetrics = parsed.storeMetrics || null;
+        storeMetrics = JSON.parse(metricsText);
+        rawRows = JSON.parse(rowsText);
+        if (!Array.isArray(rawRows)) {
+          rawRows = [];
         }
       } catch (e) {
-        console.error('Failed to parse Gemini JSON:', text);
+        console.error('Failed to parse Gemini JSON:', e);
         return NextResponse.json({ error: 'AI failed to extract valid JSON data from PDF' }, { status: 500 });
       }
     } else {
@@ -125,6 +126,41 @@ Return ONLY the raw JSON object, without any markdown blocks or explanation.`;
     }
 
     // -------------------------------------------------------------
+    // Fetch previous analysis for Chronic Issue Checking
+    // -------------------------------------------------------------
+    const sixDaysAgo = new Date();
+    sixDaysAgo.setDate(sixDaysAgo.getDate() - 6);
+    const twentyOneDaysAgo = new Date();
+    twentyOneDaysAgo.setDate(twentyOneDaysAgo.getDate() - 21);
+
+    const { data: previousAnalyses } = await supabase
+      .from('store_analyses')
+      .select('dashboard_data, created_at')
+      .eq('organization_id', profile.organization_id)
+      .lte('created_at', sixDaysAgo.toISOString())
+      .gte('created_at', twentyOneDaysAgo.toISOString())
+      .order('created_at', { ascending: false })
+      .limit(1);
+    
+    const prevDashboard = previousAnalyses?.[0]?.dashboard_data;
+    const prevTriggers = new Map<string, string>();
+
+    if (prevDashboard) {
+      const processPrevNode = (n: any, type: string, deptName: string) => {
+        n.Department = deptName;
+        const delta = getPreProcessedDeltas(n, type, prevDashboard.storeAverageCover || 0);
+        if (delta.trigger.priority < 99) {
+          prevTriggers.set(delta.id, delta.trigger.tag);
+        }
+      };
+      prevDashboard.departments?.forEach((dept: any) => {
+        (dept.lifestyles || []).forEach((n: any) => processPrevNode(n, 'Lifestyle', dept.name));
+        (dept.classes || []).forEach((n: any) => processPrevNode(n, 'Class', dept.name));
+        (dept.buyers || []).forEach((n: any) => processPrevNode(n, 'Buyer', dept.name));
+      });
+    }
+
+    // -------------------------------------------------------------
     // Batch Deep Insight Processing via Gemini
     // -------------------------------------------------------------
     const apiKey = process.env.GEMINI_API_KEY;
@@ -133,58 +169,79 @@ Return ONLY the raw JSON object, without any markdown blocks or explanation.`;
         const deltaPackages: any[] = [];
         
         // Collect all nodes for deep analysis
+        const processCurrNode = (n: any, type: string, deptName: string) => {
+          n.Department = deptName;
+          const delta = getPreProcessedDeltas(n, type, dashboardData.storeAverageCover || 0);
+          if (delta.trigger.priority < 99) {
+            if (prevTriggers.get(delta.id) === delta.trigger.tag) {
+              delta.trigger.tag = `[KRONİK] ${delta.trigger.tag}`;
+            }
+            deltaPackages.push(delta);
+          }
+        };
+
         dashboardData.departments.forEach(dept => {
-          dept.lifestyles.forEach(ls => {
-            deltaPackages.push(getPreProcessedDeltas(ls, 'Lifestyle'));
-          });
-          dept.classes.forEach(cls => {
-            deltaPackages.push(getPreProcessedDeltas(cls, 'Class'));
-          });
-          dept.buyers?.forEach(buyer => {
-            deltaPackages.push(getPreProcessedDeltas(buyer, 'Buyer'));
-          });
+          dept.lifestyles.forEach(ls => processCurrNode(ls, 'Lifestyle', dept.name));
+          dept.classes.forEach(cls => processCurrNode(cls, 'Class', dept.name));
+          dept.buyers?.forEach(buyer => processCurrNode(buyer, 'Buyer', dept.name));
         });
 
-        if (deltaPackages.length > 0) {
-          const deepInsightPrompt = `Sen uzman bir perakende veri analisti ve mağaza yöneticisi asistanısın. Görevin, sana JSON formatında verilen metrik sapmalarını (deltaları) incelemek ve bu metrikler arasındaki KORELASYONU bularak sahadaki asıl sorunu teşhis etmektir.
+        // Limit the number of deep insights to avoid LLM timeouts and token limits
+        // Sort by priority (1 is highest) and take top 15
+        const topDeltaPackages = deltaPackages
+          .sort((a, b) => a.trigger.priority - b.trigger.priority)
+          .slice(0, 15);
 
-PERAKENDE DİNAMİKLERİ YASALARI:
-1. Pazar vs Büyüme Yasası: Ürün geçen seneye göre büyüyor olabilir (Pozitif LFL), ancak Pazar Payı bölgenin gerisindeyse ortada kaçırılan bir potansiyel vardır.
-2. Görsel Sunum (VM) Yasası: Stok hızı iyi (Cover düşük) ve reyon doluluğu idealse ama bölgenin gerisinde kalınıyorsa, sorun reyondaki görsel görünürlük veya konumlandırmadır.
-3. Hantal Stok (Dead Stock) Yasası: Büyüme negatif, Pazar payı düşük, Cover yüksek ve Reyon Şişkinse (Occupancy > %110), bu ürün reyonu kilitliyordur.
-4. Dağınık Reyon Yasası: Stok hızı çok iyi (Cover düşük) ama Reyon hala aşırı Şişkin (Occupancy > %120) görünüyorsa, kalan az sayıdaki ürün reyona kötü yayılmıştır.
+        if (topDeltaPackages.length > 0) {
+          console.log(`Sending ${topDeltaPackages.length} items to Gemini for deep insight generation.`);
+          const masterPrompt = `Sen uzman bir perakende stratejisti ve Diferansiyel Teşhis motorusun. Görevin, sana verilen metrik sapmalarını ve etiketleri inceleyerek sahadaki asıl sorunu ihtimalleriyle birlikte teşhis etmektir. 
+
+Sana verilen veri paketinde Katman 1 (Tetikleyiciler) ve Katman 2 (Bağlam) verileri vardır.
+Eğer bir kategorinin tetikleyicisinde '[KRONİK]' bayrağı varsa, bu sorunun haftalardır çözülmediğini anla ve aksiyon görevini çok daha radikal (örn: merkezle görüş, alanı tamamen değiştir, personeli uyar) hale getir.
 
 KATI KURALLAR:
-- Sana JSON içinde verilmeyen hiçbir rakamı uydurma.
-- Teşhisini doğrudan metrikler arasındaki korelasyona dayandır.
-- Çıktıyı SADECE aşağıdaki formattaki gibi bir JSON objesi olarak ver. Başka hiçbir metin veya markdown bloğu kullanma. JSON anahtarları sana verdiğim 'id' alanıyla aynı olmalıdır.
+1. Sana JSON içinde verilmeyen hiçbir rakamı uydurma. Halüsinasyon yapma.
+2. Çıktıyı SADECE aşağıdaki formattaki gibi bir JSON objesi olarak ver. Başka hiçbir metin veya markdown bloğu kullanma. JSON anahtarları sana verdiğim 'id' alanıyla aynı olmalıdır.
+
+BEKLENEN JSON FORMATI:
 {
-  "id1": { "diagnosis": "...", "action": "..." },
-  "id2": { "diagnosis": "...", "action": "..." }
+  "id1": {
+    "main_finding": "Ana tespit cümlesi (Katman 1'deki en yüksek öncelikli tetikleyiciye göre).",
+    "scenarios": [
+      { "title": "İhtimal 1 Başlığı", "probability": 60, "description": "Katman 2 bağlamına göre açıklama." },
+      { "title": "İhtimal 2 Başlığı", "probability": 40, "description": "Katman 2 bağlamına göre alternatif açıklama." }
+    ],
+    "validation_task": "Mağaza müdürüne doğrudan 'şunu yap' demek yerine, sahada hangi ihtimalin doğru olduğunu bulması için saha doğrulama görevi."
+  }
 }
 
 Gelen Veri Paketi:
-${JSON.stringify(deltaPackages)}
+${JSON.stringify(topDeltaPackages)}
 `;
+
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 120000); // 120s timeout
 
           const deepResponse = await fetch(
             `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${apiKey}`,
             {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
+              signal: controller.signal,
               body: JSON.stringify({
-                contents: [{ parts: [{ text: deepInsightPrompt }] }],
-                generationConfig: { temperature: 0.2, responseMimeType: "application/json" },
+                contents: [{ parts: [{ text: masterPrompt }] }],
+                generationConfig: { temperature: 0.1, responseMimeType: "application/json" },
               }),
             }
           );
+          clearTimeout(timeoutId);
 
           if (deepResponse.ok) {
             const deepData = await deepResponse.json();
             let deepText = deepData.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
             
-            if (deepText.startsWith('```json')) deepText = deepText.replace(/^```json\s*/, '').replace(/```\s*$/, '');
-            else if (deepText.startsWith('```')) deepText = deepText.replace(/^```\s*/, '').replace(/```\s*$/, '');
+            if (deepText.startsWith('\`\`\`json')) deepText = deepText.replace(/^\`\`\`json\s*/, '').replace(/\`\`\`\s*$/, '');
+            else if (deepText.startsWith('\`\`\`')) deepText = deepText.replace(/^\`\`\`\s*/, '').replace(/\`\`\`\s*$/, '');
 
             const parsedInsights = JSON.parse(deepText);
 
@@ -192,28 +249,21 @@ ${JSON.stringify(deltaPackages)}
             dashboardData.departments.forEach(dept => {
               dept.lifestyles.forEach(ls => {
                 const id = `${dept.name}-Lifestyle-${ls.name}`;
-                if (parsedInsights[id]) {
-                  ls.deepInsight = parsedInsights[id];
-                }
+                if (parsedInsights[id]) ls.deepInsight = parsedInsights[id];
               });
               dept.classes.forEach(cls => {
                 const id = `${dept.name}-Class-${cls.name}`;
-                if (parsedInsights[id]) {
-                  cls.deepInsight = parsedInsights[id];
-                }
+                if (parsedInsights[id]) cls.deepInsight = parsedInsights[id];
               });
               dept.buyers?.forEach(buyer => {
                 const id = `${dept.name}-Buyer-${buyer.name}`;
-                if (parsedInsights[id]) {
-                  buyer.deepInsight = parsedInsights[id];
-                }
+                if (parsedInsights[id]) buyer.deepInsight = parsedInsights[id];
               });
             });
           }
         }
       } catch (err) {
         console.error("Deep insight generation failed:", err);
-        // Continue even if deep insights fail, fallback to simple insights
       }
     }
 
