@@ -57,8 +57,14 @@ export interface DepartmentNode {
   name: string;
   TotalSalesAmount: number;
   StoreSalesPct: number;
+  RegionSalesPct?: number;
+  SalesAmountPct?: number;
   SalesAmountLFLPct?: number;
+  StockQtyLFLPct?: number;
+  SalesQuantityLFLPct?: number;
   Cover?: number;
+  OnHandQty?: number;
+  OnWay?: number;
   NetFinalOccupancyPct?: number;
   lifestyles: LifestyleNode[];
   classes: ClassNode[];
