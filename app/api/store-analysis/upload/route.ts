@@ -194,24 +194,33 @@ export async function POST(request: NextRequest) {
 
         if (topDeltaPackages.length > 0) {
           console.log(`Sending ${topDeltaPackages.length} items to Gemini for deep insight generation.`);
-          const masterPrompt = `Sen uzman bir perakende stratejisti ve Diferansiyel Teşhis motorusun. Görevin, sana verilen metrik sapmalarını ve etiketleri inceleyerek sahadaki asıl sorunu ihtimalleriyle birlikte teşhis etmektir. 
+          const masterPrompt = `Sen uzman bir perakende stratejisti ve ticari analiz danışmanısın. Görevin, sana verilen reyon/kategori performans verilerini ve hesaplanmış metrik sapmalarını (deltaları) inceleyerek, bu kategorideki asıl ticari durumu veya problemi kendi perakende mantığınla serbestçe teşhis etmektir.
 
-Sana verilen veri paketinde Katman 1 (Tetikleyiciler) ve Katman 2 (Bağlam) verileri vardır.
-Eğer bir kategorinin tetikleyicisinde '[KRONİK]' bayrağı varsa, bu sorunun haftalardır çözülmediğini anla ve aksiyon görevini çok daha radikal (örn: merkezle görüş, alanı tamamen değiştir, personeli uyar) hale getir.
+Sana her ürün grubu için şu veri paketi sağlanacaktır:
+- Temel Metrikler: Ciro (SalesAmount), Cover, Eldeki Stok (OnHandQty), Yoldaki Stok (OnWay).
+- Hesaplanan 7 Kritik Sapma/Büyüme Verisi (Deltalar):
+  1. Alan Verimliliği Oranı (Space Score)
+  2. Bölgesel Satış Payı Farkı (Market Power Gap)
+  3. Stok Devir Hızı Sapması (Velocity Deviation)
+  4. Ciro Büyüme Oranı LFL % (sales_lfl_pct)
+  5. Adet Büyüme Oranı LFL % (sales_qty_lfl_pct)
+  6. Stok Büyüme Oranı LFL % (stock_qty_lfl_pct)
+  7. Stok - Satış Payı Farkı (SalesAmountPct)
 
-KATI KURALLAR:
-1. Sana JSON içinde verilmeyen hiçbir rakamı uydurma. Halüsinasyon yapma.
-2. Çıktıyı SADECE aşağıdaki formattaki gibi bir JSON objesi olarak ver. Başka hiçbir metin veya markdown bloğu kullanma. JSON anahtarları sana verdiğim 'id' alanıyla aynı olmalıdır.
+ANALİZ VE TİCARİ YORUMLAMA KURALLARI:
+1. Özgür Analiz: Sağlanan tüm metriklerin kombinasyonunu inceleyerek kendi çıkarımlarını ve yorumlarını oluştur. Sınırlayıcı şablonlara bağlı kalma. Teşhislerinde mağaza operasyonları, fiyatlama, lojistik, reyon düzeni veya beden kırıklıkları gibi ticari ihtimalleri özgürce değerlendir.
+2. [KRONİK] Durumlar: Eğer kategoride '[KRONİK]' etiketi varsa, bu sorunun uzun süredir devam ettiğini gör ve mağaza müdürüne daha radikal/hızlı aksiyon önerileri sun.
+3. Çıktı Formatı: Çıktıyı SADECE aşağıdaki geçerli JSON objesi formatında ver. Markdown kod blokları veya herhangi bir açıklama metni ekleme. JSON anahtarları sana verilen 'id' değeri ile birebir aynı olmalıdır.
 
 BEKLENEN JSON FORMATI:
 {
-  "id1": {
-    "main_finding": "Ana tespit cümlesi (Katman 1'deki en yüksek öncelikli tetikleyiciye göre).",
+  "kategori_id_degeri": {
+    "main_finding": "Yapay zekanın kendi ticari birikimiyle yaptığı kapsamlı ana durum teşhisi.",
     "scenarios": [
-      { "title": "İhtimal 1 Başlığı", "probability": 60, "description": "Katman 2 bağlamına göre açıklama." },
-      { "title": "İhtimal 2 Başlığı", "probability": 40, "description": "Katman 2 bağlamına göre alternatif açıklama." }
+      { "title": "Olası Neden 1", "probability": 60, "description": "Metrik kombinasyonlarına dayanan detaylı operasyonel sebep senaryosu." },
+      { "title": "Olası Neden 2", "probability": 40, "description": "Alternatif olası durum veya sebep açıklaması." }
     ],
-    "validation_task": "Mağaza müdürüne doğrudan 'şunu yap' demek yerine, sahada hangi ihtimalin doğru olduğunu bulması için saha doğrulama görevi."
+    "validation_task": "Mağaza yöneticisinin sahada bu teşhisi doğrulamak için yapması gereken kontrol görevi."
   }
 }
 
