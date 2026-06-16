@@ -59,57 +59,84 @@ export async function POST(request: NextRequest) {
 
       const base64Data = buffer.toString('base64');
       
-      const metricsPrompt = `Extract the overall store metrics from the top sections of this dashboard PDF (Sales Amount, Sales Amount LY %, Sales Quantity, Sales Quantity LY %, Cover, Conversion, IPT, ATV, FOOTFALL, Unit Price). Map them to this exact schema: { "SalesAmount": number, "SalesAmountLYPct": number, "SalesQuantity": number, "SalesQuantityLYPct": number, "Cover": number, "ConversionPct": number, "IPT": number, "ATV": number, "Footfall": number, "UnitPrice": number }. For example, if you see %51,5, return 51.5. If you see 1.578.696, return 1578696. If missing, return 0. Return ONLY the raw JSON object, without any markdown blocks or explanation.`;
+      const prompt = `Extract both the overall store metrics and the tabular data from this store dashboard PDF.
+1. Store Metrics: from the top sections (Sales Amount, Sales Amount LY %, Sales Quantity, Sales Quantity LY %, Cover, Conversion, IPT, ATV, FOOTFALL, Unit Price).
+2. Rows: from the table. The PDF contains rows representing 'Departments', 'Groups' (or Lifestyles) like Casual, 'Classes', and 'Buyers'. Extract ALL of these rows.
+For percentage values, extract them as plain numbers (e.g., %25.5 -> 25.5). If missing or "Boş", use 0.`;
 
-      const rowsPrompt = `Extract the tabular data from this store dashboard PDF into a JSON array of objects. The PDF contains rows representing 'Departments' (e.g. WOMAN, MAN totals), 'Groups' (or Lifestyles) like Casual, Young, 'Classes' like Trousers, Shirts, and 'Buyers' (or Sub-Categories like Woven Top, Knitted). Extract ALL of these rows as separate objects in the array. Do not summarize or truncate the list. Map the values to this exact schema: { "Department": "string", "RowType": "string", "Name": "string", "StoreSalesPct": number, "RegionSalesPct": number, "SalesAmountLFLPct": number, "StockQtyLFLPct": number, "SalesQuantityLFLPct": number, "Cover": number, "OnWay": number, "NetFinalOccupancyPct": number, "SalesAmount": number }. For percentage values, extract them as numbers (e.g., %25.5 -> 25.5). If missing or "Boş", use 0. Return ONLY the raw JSON array, without any markdown blocks or explanation.`;
+      const responseSchema = {
+        type: "OBJECT",
+        properties: {
+          metrics: {
+            type: "OBJECT",
+            properties: {
+              SalesAmount: { type: "NUMBER" },
+              SalesAmountLYPct: { type: "NUMBER" },
+              SalesQuantity: { type: "NUMBER" },
+              SalesQuantityLYPct: { type: "NUMBER" },
+              Cover: { type: "NUMBER" },
+              ConversionPct: { type: "NUMBER" },
+              IPT: { type: "NUMBER" },
+              ATV: { type: "NUMBER" },
+              Footfall: { type: "NUMBER" },
+              UnitPrice: { type: "NUMBER" }
+            },
+            required: ["SalesAmount", "SalesAmountLYPct", "SalesQuantity", "SalesQuantityLYPct", "Cover", "ConversionPct", "IPT", "ATV", "Footfall", "UnitPrice"]
+          },
+          rows: {
+            type: "ARRAY",
+            items: {
+              type: "OBJECT",
+              properties: {
+                Department: { type: "STRING" },
+                RowType: { type: "STRING" },
+                Name: { type: "STRING" },
+                StoreSalesPct: { type: "NUMBER" },
+                RegionSalesPct: { type: "NUMBER" },
+                SalesAmountLFLPct: { type: "NUMBER" },
+                StockQtyLFLPct: { type: "NUMBER" },
+                SalesQuantityLFLPct: { type: "NUMBER" },
+                Cover: { type: "NUMBER" },
+                OnWay: { type: "NUMBER" },
+                NetFinalOccupancyPct: { type: "NUMBER" },
+                SalesAmount: { type: "NUMBER" }
+              },
+              required: ["Department", "RowType", "Name", "StoreSalesPct", "RegionSalesPct", "SalesAmountLFLPct", "StockQtyLFLPct", "SalesQuantityLFLPct", "Cover", "OnWay", "NetFinalOccupancyPct", "SalesAmount"]
+            }
+          }
+        },
+        required: ["metrics", "rows"]
+      };
 
-      // We run them sequentially to avoid rate limits and too many concurrent requests to the same API
-      console.log('Extracting metrics from PDF...');
-      const metricsResponse = await fetch(
+      console.log('Extracting metrics and rows from PDF in a single call...');
+      const response = await fetch(
         `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${apiKey}`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            contents: [{ parts: [{ text: metricsPrompt }, { inlineData: { mimeType: 'application/pdf', data: base64Data } }] }],
-            generationConfig: { temperature: 0.1, responseMimeType: "application/json" },
+            contents: [{ parts: [{ text: prompt }, { inlineData: { mimeType: 'application/pdf', data: base64Data } }] }],
+            generationConfig: { 
+              temperature: 0.1, 
+              responseMimeType: "application/json",
+              responseSchema: responseSchema
+            },
           }),
         }
       );
 
-      console.log('Extracting rows from PDF...');
-      const rowsResponse = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${apiKey}`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            contents: [{ parts: [{ text: rowsPrompt }, { inlineData: { mimeType: 'application/pdf', data: base64Data } }] }],
-            generationConfig: { temperature: 0.1, responseMimeType: "application/json" },
-          }),
-        }
-      );
-
-      if (!metricsResponse.ok || !rowsResponse.ok) {
-        console.error('Gemini API Error - Metrics:', await metricsResponse.text(), 'Rows:', await rowsResponse.text());
+      if (!response.ok) {
+        console.error('Gemini API Error:', await response.text());
         return NextResponse.json({ error: 'Failed to extract data from PDF using AI' }, { status: 500 });
       }
 
-      const metricsData = await metricsResponse.json();
-      const rowsData = await rowsResponse.json();
-
-      let metricsText = metricsData.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
-      let rowsText = rowsData.candidates?.[0]?.content?.parts?.[0]?.text || '[]';
+      const responseData = await response.json();
+      const responseText = responseData.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
       
-      if (metricsText.startsWith('\`\`\`json')) metricsText = metricsText.replace(/^\`\`\`json\s*/, '').replace(/\`\`\`\s*$/, '');
-      else if (metricsText.startsWith('\`\`\`')) metricsText = metricsText.replace(/^\`\`\`\s*/, '').replace(/\`\`\`\s*$/, '');
-
-      if (rowsText.startsWith('\`\`\`json')) rowsText = rowsText.replace(/^\`\`\`json\s*/, '').replace(/\`\`\`\s*$/, '');
-      else if (rowsText.startsWith('\`\`\`')) rowsText = rowsText.replace(/^\`\`\`\s*/, '').replace(/\`\`\`\s*$/, '');
-
       try {
-        storeMetrics = JSON.parse(metricsText);
-        rawRows = JSON.parse(rowsText);
+        const parsedData = JSON.parse(responseText);
+        storeMetrics = parsedData.metrics || null;
+        rawRows = parsedData.rows || [];
         if (!Array.isArray(rawRows)) {
           rawRows = [];
         }

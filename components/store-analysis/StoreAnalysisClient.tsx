@@ -1,12 +1,14 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { ProcessedStoreDashboard, DepartmentNode } from '@/lib/services/store-analysis-engine';
 import LifestyleAccordion from './LifestyleAccordion';
+import { createClient } from '@/lib/supabase/client';
 
 type TabType = 'lifestyles' | 'classes' | 'buyers';
 
 interface AnalysisRecord {
+  id?: string;
   dashboard_data: ProcessedStoreDashboard;
   created_at: string;
 }
@@ -27,6 +29,36 @@ export default function StoreAnalysisClient({ historyAnalyses, isOwner }: StoreA
   const [isUploading, setIsUploading] = useState(false);
   const [progressMsg, setProgressMsg] = useState<string>('');
   const [selectedDept, setSelectedDept] = useState<string | null>(data?.departments[0]?.name || null);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+
+  const hasAIAnalysis = data && data.departments && data.departments.some((dept: any) => 
+    (dept.lifestyles || []).some((ls: any) => ls.deepInsight) || 
+    (dept.classes || []).some((cls: any) => cls.deepInsight) ||
+    (dept.buyers || []).some((buyer: any) => buyer.deepInsight)
+  );
+
+  const handleRunAIAnalysis = async () => {
+    if (!currentAnalysis || !currentAnalysis.id || isAnalyzing) return;
+    setIsAnalyzing(true);
+    try {
+      const res = await fetch('/api/store-analysis/analyze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ analysisId: currentAnalysis.id }),
+      });
+      
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.error || 'Analiz başarısız oldu');
+      
+      alert('Yapay zeka analizi başarıyla tamamlandı!');
+      window.location.reload();
+    } catch (err: any) {
+      console.error(err);
+      alert('Analiz sırasında hata: ' + (err.message || 'Bilinmeyen hata'));
+    } finally {
+      setIsAnalyzing(false);
+    }
+  };
   const [activeTab, setActiveTab] = useState<TabType>('lifestyles');
   const [openLifestyleIdx, setOpenLifestyleIdx] = useState<number | null>(null);
   const [openClassIdx, setOpenClassIdx] = useState<number | null>(null);
@@ -53,99 +85,62 @@ export default function StoreAnalysisClient({ historyAnalyses, isOwner }: StoreA
     if (!file) return;
 
     setIsUploading(true);
-    setProgressMsg('Adım 1/4: Okunuyor ve sınıflandırılıyor...');
+    setProgressMsg('Arka plan işi başlatılıyor...');
     
     const formData = new FormData();
     formData.append('file', file);
 
     try {
-      // Step 1: Extract
-      const step1Res = await fetch('/api/store-analysis/step1-extract', {
+      const startRes = await fetch('/api/store-analysis/start-job', {
         method: 'POST',
         body: formData,
       });
-      if (!step1Res.ok) throw new Error('Adım 1 başarısız');
-      const step1Data = await step1Res.json();
-      if (!step1Data.success) throw new Error(step1Data.error);
+      if (!startRes.ok) throw new Error('Arka plan işi başlatılamadı');
+      const startData = await startRes.json();
+      if (!startData.success) throw new Error(startData.error);
       
-      const { dashboardData, prevTriggers } = step1Data.data;
+      const jobId = startData.jobId;
+      const supabase = createClient();
 
-      // Step 2: Deep Insight (Woman)
-      setProgressMsg('Adım 2/4: Kadın reyonu analiz ediliyor...');
-      const step2WomanRes = await fetch('/api/store-analysis/step2-deep-insight', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ dashboardData, prevTriggers, target: 'woman' }),
-      });
-      const step2WomanData = step2WomanRes.ok ? await step2WomanRes.json() : {};
-      const womanInsights = step2WomanData.parsedInsights || {};
+      setProgressMsg('Bekleniyor: Kuyruğa alındı...');
 
-      // Step 3: Deep Insight (Man)
-      setProgressMsg('Adım 3/4: Erkek reyonu analiz ediliyor...');
-      const step3ManRes = await fetch('/api/store-analysis/step2-deep-insight', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ dashboardData, prevTriggers, target: 'man' }),
-      });
-      const step3ManData = step3ManRes.ok ? await step3ManRes.json() : {};
-      const manInsights = step3ManData.parsedInsights || {};
+      // Subscribe to changes on this specific job
+      const channel = supabase.channel(`job-${jobId}`)
+        .on(
+          'postgres_changes',
+          {
+            event: 'UPDATE',
+            schema: 'public',
+            table: 'ai_analysis_jobs',
+            filter: `id=eq.${jobId}`
+          },
+          (payload) => {
+            const newStatus = payload.new.status;
+            if (newStatus === 'extracting') setProgressMsg('Adım 1/3: Yapay Zeka tabloyu okuyor (Bu 2-3 dakika sürebilir)...');
+            else if (newStatus === 'analyzing') setProgressMsg('Adım 2/3: Deep Insight analizleri yapılıyor...');
+            else if (newStatus === 'completed') {
+              setProgressMsg('Adım 3/3: Tamamlandı! Ekran yenileniyor...');
+              supabase.removeChannel(channel);
+              setTimeout(() => window.location.reload(), 1500);
+            }
+            else if (newStatus === 'error') {
+              alert('İşlem sırasında hata: ' + payload.new.error_message);
+              setIsUploading(false);
+              setProgressMsg('');
+              supabase.removeChannel(channel);
+            }
+          }
+        )
+        .subscribe();
 
-      // Step 4: Deep Insight (Other)
-      setProgressMsg('Adım 4/4: Diğer reyonlar analiz ediliyor...');
-      const step4OtherRes = await fetch('/api/store-analysis/step2-deep-insight', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ dashboardData, prevTriggers, target: 'other' }),
-      });
-      const step4OtherData = step4OtherRes.ok ? await step4OtherRes.json() : {};
-      const otherInsights = step4OtherData.parsedInsights || {};
+      // Trigger the Edge Function to start processing
+      supabase.functions.invoke('parse-store-pdf', {
+        body: { jobId }
+      }).catch(err => console.error('Edge function trigger error:', err));
 
-      // Merge insights
-      setProgressMsg('Sonuçlar kaydediliyor...');
-      const allInsights = { ...womanInsights, ...manInsights, ...otherInsights };
-      
-      dashboardData.departments.forEach((dept: any) => {
-        (dept.lifestyles || []).forEach((ls: any) => {
-          const id = `${dept.name}-Lifestyle-${ls.name}`;
-          if (allInsights[id]) ls.deepInsight = allInsights[id];
-        });
-        (dept.classes || []).forEach((cls: any) => {
-          const id = `${dept.name}-Class-${cls.name}`;
-          if (allInsights[id]) cls.deepInsight = allInsights[id];
-        });
-        (dept.buyers || []).forEach((buyer: any) => {
-          const id = `${dept.name}-Buyer-${buyer.name}`;
-          if (allInsights[id]) buyer.deepInsight = allInsights[id];
-        });
-      });
-
-      // Save
-      const saveRes = await fetch('/api/store-analysis/step3-save', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ dashboardData }),
-      });
-      if (!saveRes.ok) throw new Error('Kayıt Başarısız');
-      const saveData = await saveRes.json();
-
-      if (saveData.success && saveData.data) {
-        const newRecord = {
-          dashboard_data: saveData.data.dashboard_data,
-          created_at: saveData.data.created_at
-        };
-        const updatedAnalyses = [newRecord, ...analyses].slice(0, 3);
-        setAnalyses(updatedAnalyses);
-        setSelectedIndex(0);
-
-        if (!selectedDept && saveData.data.dashboard_data.departments.length > 0) {
-          setSelectedDept(saveData.data.dashboard_data.departments[0].name);
-        }
-        alert('🎉 Rapor başarıyla yapay zeka tarafından analiz edildi ve veriler güncellendi!');
-      }
     } catch (error: any) {
       console.error('Error uploading file:', error);
       alert('Dosya yüklenirken bir hata oluştu: ' + error.message);
-    } finally {
       setIsUploading(false);
       setProgressMsg('');
       if (e.target) e.target.value = '';
@@ -166,7 +161,7 @@ export default function StoreAnalysisClient({ historyAnalyses, isOwner }: StoreA
         </p>
         
         {isOwner && (
-          <div className="mt-6 flex justify-center">
+          <div className="mt-6 flex flex-col sm:flex-row items-center justify-center gap-3">
             <label className="cursor-pointer inline-flex justify-center items-center px-6 py-3 bg-blue-600 text-white font-medium rounded-xl hover:bg-blue-700 transition-colors shadow-sm">
               <span className="flex items-center">
                 <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -182,6 +177,18 @@ export default function StoreAnalysisClient({ historyAnalyses, isOwner }: StoreA
                 disabled={isUploading}
               />
             </label>
+            <a 
+              href="/store-analysis/database"
+              className="inline-flex justify-center items-center px-6 py-3 bg-blue-50 hover:bg-blue-100 border border-blue-200 text-blue-700 font-medium rounded-xl transition-colors shadow-sm"
+            >
+              🗄️ Veritabanı Kayıtları
+            </a>
+            <a 
+              href="/store-analysis/debug"
+              className="inline-flex justify-center items-center px-6 py-3 bg-gray-50 hover:bg-gray-100 border border-gray-200 text-gray-700 font-medium rounded-xl transition-colors"
+            >
+              🛠️ Diagnostik Paneli
+            </a>
           </div>
         )}
       </div>
@@ -194,23 +201,59 @@ export default function StoreAnalysisClient({ historyAnalyses, isOwner }: StoreA
     <div className="space-y-6">
       {/* Top Header & Upload Button */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div className="flex items-center gap-2">
-          <span className="text-sm text-gray-500 font-medium">Analiz Geçmişi:</span>
-          <select 
-            value={selectedIndex}
-            onChange={(e) => setSelectedIndex(Number(e.target.value))}
-            className="border border-gray-200 rounded-lg p-2 text-sm text-gray-700 bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
-          >
-            {analyses.map((a, idx) => (
-              <option key={idx} value={idx}>
-                {new Date(a.created_at).toLocaleString('tr-TR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
-              </option>
-            ))}
-          </select>
+        <div className="flex flex-wrap items-center gap-4">
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-gray-500 font-medium">Analiz Geçmişi:</span>
+            <select 
+              value={selectedIndex}
+              onChange={(e) => setSelectedIndex(Number(e.target.value))}
+              className="border border-gray-200 rounded-lg p-2 text-sm text-gray-700 bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
+            >
+              {analyses.map((a, idx) => (
+                <option key={idx} value={idx}>
+                  {new Date(a.created_at).toLocaleString('tr-TR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {data && !hasAIAnalysis && (
+            <button
+              onClick={handleRunAIAnalysis}
+              disabled={isAnalyzing}
+              className="inline-flex items-center px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors shadow-sm text-sm font-medium disabled:opacity-50"
+            >
+              {isAnalyzing ? (
+                <>
+                  <svg className="animate-spin h-4 w-4 mr-2 text-white" viewBox="0 0 24 24" fill="none">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                  </svg>
+                  Yapay Zeka Analiz Ediyor...
+                </>
+              ) : (
+                <>
+                  <svg className="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                  </svg>
+                  🤖 Yapay Zeka Teşhisi Yap
+                </>
+              )}
+            </button>
+          )}
+
+          {data && hasAIAnalysis && (
+            <span className="inline-flex items-center px-3 py-1 bg-green-50 text-green-700 rounded-full text-xs font-semibold border border-green-200">
+              <svg className="w-3.5 h-3.5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+              </svg>
+              Yapay Zeka Analizi Tamamlandı
+            </span>
+          )}
         </div>
         
         {isOwner && (
-          <div className="flex">
+          <div className="flex items-center gap-2">
             <label className="cursor-pointer inline-flex items-center px-4 py-2 bg-blue-600 border border-transparent text-white rounded-lg hover:bg-blue-700 transition-colors shadow-sm text-sm font-medium">
               <span className="flex items-center">
                 <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -226,6 +269,18 @@ export default function StoreAnalysisClient({ historyAnalyses, isOwner }: StoreA
                 disabled={isUploading}
               />
             </label>
+            <a 
+              href="/store-analysis/database"
+              className="inline-flex items-center px-4 py-2 bg-blue-50 border border-blue-200 text-blue-700 rounded-lg hover:bg-blue-100 transition-colors text-sm font-medium shadow-sm"
+            >
+              🗄️ Veritabanı Kayıtları
+            </a>
+            <a 
+              href="/store-analysis/debug"
+              className="inline-flex items-center px-4 py-2 bg-gray-50 border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-100 transition-colors text-sm font-medium shadow-sm"
+            >
+              🛠️ Diagnostik
+            </a>
           </div>
         )}
       </div>
@@ -387,6 +442,7 @@ export default function StoreAnalysisClient({ historyAnalyses, isOwner }: StoreA
                       isClass={false} 
                       isOpen={openLifestyleIdx === idx}
                       onToggle={() => setOpenLifestyleIdx(openLifestyleIdx === idx ? null : idx)}
+                      storeAverageCover={data.storeAverageCover || 0}
                     />
                   ))
                 ) : (
@@ -404,6 +460,7 @@ export default function StoreAnalysisClient({ historyAnalyses, isOwner }: StoreA
                       isClass={true} 
                       isOpen={openBuyerIdx === idx}
                       onToggle={() => setOpenBuyerIdx(openBuyerIdx === idx ? null : idx)}
+                      storeAverageCover={data.storeAverageCover || 0}
                     />
                   ))
                 ) : (
@@ -421,6 +478,7 @@ export default function StoreAnalysisClient({ historyAnalyses, isOwner }: StoreA
                       isClass={true} 
                       isOpen={openClassIdx === idx}
                       onToggle={() => setOpenClassIdx(openClassIdx === idx ? null : idx)}
+                      storeAverageCover={data.storeAverageCover || 0}
                     />
                   ))
                 ) : (

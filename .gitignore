@@ -32,3 +32,12 @@ yarn-error.log*
 # TypeScript
 *.tsbuildinfo
 next-env.d.ts
+
+# Scratch, test files, and backups
+/scratch
+*.backup
+/parsed_data.json
+/pdf_dump.txt
+/check_jobs.js
+/app/(dashboard)/test-pdf/
+/app/api/test-pdf/

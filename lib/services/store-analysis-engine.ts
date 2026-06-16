@@ -14,6 +14,8 @@ export interface RawStoreDataRow {
   OnWay: number; // Yoldaki Ürün
   NetFinalOccupancyPct: number; // Kapasite %
   SalesAmount: number; // Toplam Ciro hesaplamak için
+  SalesAmountPct: number; // Stock - Sales Amount %
+  OnHandQty: number; // Stock Qty OnHand
 }
 
 export interface AnalysisInsight {
@@ -216,10 +218,10 @@ export function processStoreData(rawRows: any[]): ProcessedStoreDashboard {
       Cover: Number(raw.Cover || raw.cover || 0),
       OnWay: Number(raw.OnWay || raw.onWay || 0),
       NetFinalOccupancyPct: Number(raw.NetFinalOccupancyPct || raw.netFinalOccupancyPct || 0),
-      SalesAmount: Number(raw.SalesAmount || raw.salesAmount || 0)
+      SalesAmount: Number(raw.SalesAmount || raw.salesAmount || 0),
+      SalesAmountPct: Number(raw.SalesAmountPct || raw.salesAmountPct || 0),
+      OnHandQty: Number(raw.OnHandQty || raw.onHandQty || 0)
     };
-
-    totalSales += row.SalesAmount;
 
     if (!deptMap.has(row.Department)) {
       deptMap.set(row.Department, {
@@ -233,7 +235,6 @@ export function processStoreData(rawRows: any[]): ProcessedStoreDashboard {
     }
 
     const dept = deptMap.get(row.Department)!;
-    dept.TotalSalesAmount += row.SalesAmount;
 
     const insight = generateInsight(
       row.StoreSalesPct,
@@ -243,10 +244,24 @@ export function processStoreData(rawRows: any[]): ProcessedStoreDashboard {
       row.NetFinalOccupancyPct
     );
 
-    if (rowType === 'Department' || name === deptName) {
-      dept.StoreSalesPct = row.StoreSalesPct; // Set directly from AI
+    const isDeptSummary = (
+      rowType === 'Department' || 
+      name.toLowerCase() === deptName.toLowerCase() || 
+      name.toLowerCase() === 'toplam'
+    );
+
+    if (isDeptSummary) {
+      // For department summary rows, we aggregate their sales and copy department level metadata
+      dept.TotalSalesAmount += row.SalesAmount;
+      dept.StoreSalesPct = row.StoreSalesPct; 
+      dept.RegionSalesPct = row.RegionSalesPct;
+      dept.SalesAmountPct = row.SalesAmountPct;
       dept.SalesAmountLFLPct = row.SalesAmountLFLPct;
+      dept.StockQtyLFLPct = row.StockQtyLFLPct;
+      dept.SalesQuantityLFLPct = row.SalesQuantityLFLPct;
       dept.Cover = row.Cover;
+      dept.OnHandQty = row.OnHandQty;
+      dept.OnWay = row.OnWay;
       dept.NetFinalOccupancyPct = row.NetFinalOccupancyPct;
     } else if (rowType === 'Lifestyle' || rowType === 'Group') {
       dept.lifestyles.push({ ...row, insight, name: name });
@@ -257,8 +272,25 @@ export function processStoreData(rawRows: any[]): ProcessedStoreDashboard {
     }
   }
 
-  // Second pass: Calculate department aggregates (only if not set directly from a Department row)
+  // Second pass: Calculate department aggregates (only if not set directly from a Department row) and calculate total sales
+  totalSales = 0;
   for (const dept of deptMap.values()) {
+    // If the department didn't have any parsed summary rows, sum up the buyers or lifestyles
+    if (dept.TotalSalesAmount === 0) {
+      let computedSales = 0;
+      if (dept.buyers.length > 0) {
+        computedSales = dept.buyers.reduce((acc, curr) => acc + curr.SalesAmount, 0);
+      } else if (dept.lifestyles.length > 0) {
+        computedSales = dept.lifestyles.reduce((acc, curr) => acc + curr.SalesAmount, 0);
+      } else if (dept.classes.length > 0) {
+        computedSales = dept.classes.reduce((acc, curr) => acc + curr.SalesAmount, 0);
+      }
+      dept.TotalSalesAmount = computedSales;
+    }
+
+    totalSales += dept.TotalSalesAmount;
+
+    // Recalculate StoreSalesPct if it's 0 or missing
     if (dept.StoreSalesPct === 0) {
       let deptStoreSalesPct = 0;
       for (const c of dept.classes) {

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { LifestyleNode, ClassNode } from '@/lib/services/store-analysis-engine';
+import { LifestyleNode, ClassNode, getPreProcessedDeltas } from '@/lib/services/store-analysis-engine';
 import AssignStoreTaskModal from './AssignStoreTaskModal';
 
 interface LifestyleAccordionProps {
@@ -9,9 +9,10 @@ interface LifestyleAccordionProps {
   isClass?: boolean;
   isOpen?: boolean;
   onToggle?: () => void;
+  storeAverageCover?: number;
 }
 
-export default function LifestyleAccordion({ node, isClass = false, isOpen: controlledIsOpen, onToggle }: LifestyleAccordionProps) {
+export default function LifestyleAccordion({ node, isClass = false, isOpen: controlledIsOpen, onToggle, storeAverageCover = 0 }: LifestyleAccordionProps) {
   const [internalIsOpen, setInternalIsOpen] = useState(false);
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
 
@@ -24,6 +25,8 @@ export default function LifestyleAccordion({ node, isClass = false, isOpen: cont
       setInternalIsOpen(!internalIsOpen);
     }
   };
+
+  const delta = getPreProcessedDeltas(node, isClass ? 'Class' : 'Lifestyle', storeAverageCover);
 
   // Type guard and safe property access
   const isLifestyle = !isClass;
@@ -110,15 +113,54 @@ export default function LifestyleAccordion({ node, isClass = false, isOpen: cont
 
       {/* Expanded Content */}
       {isOpen && (
-        <div className={`px-6 pb-6 pt-2 ${isClass ? 'pl-10' : ''}`}>
-          {/* AI Insight Box */}
-          <div className={`p-5 rounded-xl border ${statusColor.replace('text', 'border').replace('bg', 'bg').replace('-600', '-200')} mb-4 flex flex-col md:flex-row gap-4 items-start md:items-center justify-between`}>
-            <div>
-              <h4 className="font-bold flex items-center gap-2 mb-4">
-                {node.insight.status === 'red' ? '⚠️' : node.insight.status === 'green' ? '🌟' : 'ℹ️'}
-                {node.insight.warning}
-              </h4>
-              {node.deepInsight ? (
+        <div className={`px-6 pb-6 pt-2 flex flex-col gap-4 ${isClass ? 'pl-10' : ''}`}>
+          {/* Matematiksel Deltalar Grid */}
+          <div className="bg-gray-50 rounded-xl p-4 border border-gray-200/60">
+            <h4 className="font-bold text-xs text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-1.5">
+              <svg className="w-4 h-4 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 002 2h2a2 2 0 002-2" />
+              </svg>
+              Matematiksel Göstergeler (Hesaplanan Deltalar)
+            </h4>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="bg-white p-3 rounded-lg border border-gray-200 shadow-xs">
+                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Alan Verimliliği (Space Score)</span>
+                <p className="text-base font-extrabold text-gray-900 mt-1">
+                  {Number(delta.context.space_opportunity.score) > 0 ? '+' : ''}{delta.context.space_opportunity.score}
+                </p>
+                <span className={`inline-block text-[9px] font-bold px-1.5 py-0.5 rounded-full mt-1.5 ${
+                  delta.context.space_opportunity.label.includes('KAHRAMAN') ? 'bg-green-50 text-green-700 border border-green-200' :
+                  delta.context.space_opportunity.label.includes('ASALAĞI') || delta.context.space_opportunity.label.includes('VERİMSİZ') ? 'bg-red-50 text-red-700 border border-red-200' :
+                  'bg-gray-50 text-gray-700 border border-gray-200'
+                }`}>
+                  {delta.context.space_opportunity.label}
+                </span>
+              </div>
+
+              <div className="bg-white p-3 rounded-lg border border-gray-200 shadow-xs">
+                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Bölgesel Pazar Payı Farkı</span>
+                <p className={`text-base font-extrabold mt-1 ${Number(delta.context.market_power_gap) > 0 ? 'text-green-600' : Number(delta.context.market_power_gap) < 0 ? 'text-gray-900' : 'text-gray-900'}`}>
+                  {Number(delta.context.market_power_gap) > 0 ? '+' : ''}{delta.context.market_power_gap}%
+                </p>
+                <span className="text-[9px] text-gray-400 mt-2 block">Bölge ortalaması ile farkı</span>
+              </div>
+
+              <div className="bg-white p-3 rounded-lg border border-gray-200 shadow-xs">
+                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Stok Devir Sapması (Velocity)</span>
+                <p className="text-base font-extrabold text-gray-900 mt-1">{delta.context.velocity_deviation}x</p>
+                <span className="text-[9px] text-gray-400 mt-2 block">Mağaza geneline göre devir oranı</span>
+              </div>
+            </div>
+          </div>
+
+          {/* AI Teşhis ve Aksiyon Kutusu */}
+          {node.deepInsight ? (
+            <div className={`p-5 rounded-xl border ${statusColor.replace('text', 'border').replace('bg', 'bg').replace('-600', '-200')} flex flex-col md:flex-row gap-4 items-start md:items-center justify-between`}>
+              <div className="w-full">
+                <h4 className="font-bold flex items-center gap-2 mb-4">
+                  {node.insight.status === 'red' ? '⚠️' : node.insight.status === 'green' ? '🌟' : 'ℹ️'}
+                  {node.insight.warning}
+                </h4>
                 <div className="flex flex-col gap-4 w-full">
                   <div className="bg-white/60 p-4 rounded-lg border border-gray-100">
                     <span className="font-bold text-xs uppercase tracking-wider text-gray-500 mb-2 block">📊 Ana Tespit</span>
@@ -149,32 +191,26 @@ export default function LifestyleAccordion({ node, isClass = false, isOpen: cont
                     <p className="text-sm text-gray-800 leading-relaxed font-medium">{node.deepInsight.validation_task}</p>
                   </div>
                 </div>
-              ) : (
-                <div className="flex flex-col gap-3 mt-2">
-                  <div className="bg-white/60 p-3 rounded-lg border border-gray-100">
-                    <span className="font-bold text-[10px] uppercase tracking-wider text-gray-500 mb-1 block">Teşhis</span>
-                    <p className="text-sm text-gray-800">{node.insight.diagnosis}</p>
-                  </div>
-                  <div className="bg-white/60 p-3 rounded-lg border border-gray-100">
-                    <span className="font-bold text-[10px] uppercase tracking-wider text-blue-600 mb-1 block">Aksiyon</span>
-                    <p className="text-sm text-gray-800">{node.insight.action}</p>
-                  </div>
-                </div>
-              )}
+              </div>
+              
+              <button 
+                onClick={() => setIsTaskModalOpen(true)}
+                className="shrink-0 flex items-center px-4 py-2 bg-gray-900 text-white rounded-lg text-sm font-medium hover:bg-gray-800 transition-colors shadow-sm whitespace-nowrap mt-4 md:mt-0"
+              >
+                <svg className="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
+                </svg>
+                Görev Ata
+              </button>
             </div>
-            
-            <button 
-              onClick={() => setIsTaskModalOpen(true)}
-              className="shrink-0 flex items-center px-4 py-2 bg-gray-900 text-white rounded-lg text-sm font-medium hover:bg-gray-800 transition-colors shadow-sm whitespace-nowrap mt-4 md:mt-0"
-            >
-              <svg className="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
-              </svg>
-              Görev Ata
-            </button>
-          </div>
-
-          {/* Render children classes if it's a lifestyle (REMOVED: classes are now decoupled) */}
+          ) : (
+            <div className="p-4 rounded-xl border border-dashed border-gray-200 bg-gray-50/50">
+              <h5 className="font-bold text-xs text-gray-500 uppercase tracking-wider flex items-center gap-1.5">
+                <span>🤖</span> Yapay Zeka Teşhisi Bekleniyor
+              </h5>
+              <p className="text-xs text-gray-400 mt-1">Bu kategori için otomatik yapay zeka teşhisleri üretilmedi. Sayfanın en üstünde yer alan <b>"Yapay Zeka Teşhisi Yap"</b> butonuna basarak analizi başlatabilirsiniz.</p>
+            </div>
+          )}
         </div>
       )}
 

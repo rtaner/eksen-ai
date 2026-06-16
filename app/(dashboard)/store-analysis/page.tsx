@@ -27,7 +27,7 @@ export default async function StoreAnalysisPage() {
   // Fetch the latest 3 completed store analyses for this organization
   const { data: latestAnalyses } = await supabase
     .from('store_analyses')
-    .select('dashboard_data, created_at')
+    .select('id, dashboard_data, created_at')
     .eq('organization_id', profile.organization_id)
     .eq('status', 'completed')
     .order('created_at', { ascending: false })

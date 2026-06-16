@@ -45,6 +45,43 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Failed to save analysis to database' }, { status: 500 });
     }
 
+    // Cleanup old records to keep only the 3 latest store_analyses and ai_analysis_jobs
+    try {
+      const orgId = profile.organization_id;
+
+      // Clean store_analyses
+      const { data: analyses } = await supabase
+        .from('store_analyses')
+        .select('id')
+        .eq('organization_id', orgId)
+        .order('created_at', { ascending: false });
+
+      if (analyses && analyses.length > 3) {
+        const idsToDelete = analyses.slice(3).map((a: any) => a.id);
+        await supabase
+          .from('store_analyses')
+          .delete()
+          .in('id', idsToDelete);
+      }
+
+      // Clean ai_analysis_jobs
+      const { data: jobs } = await supabase
+        .from('ai_analysis_jobs')
+        .select('id')
+        .eq('organization_id', orgId)
+        .order('created_at', { ascending: false });
+
+      if (jobs && jobs.length > 3) {
+        const idsToDelete = jobs.slice(3).map((j: any) => j.id);
+        await supabase
+          .from('ai_analysis_jobs')
+          .delete()
+          .in('id', idsToDelete);
+      }
+    } catch (cleanError) {
+      console.error('Record cleanup failed:', cleanError);
+    }
+
     return NextResponse.json({ success: true, data: savedAnalysis });
   } catch (error: any) {
     console.error('Save processing error:', error);
