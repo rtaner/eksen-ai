@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { getPreProcessedDeltas } from '@/lib/services/store-analysis-engine';
+import { callGeminiNext, parseGeminiJSON } from '@/lib/utils/gemini';
 
 export async function POST(request: NextRequest) {
   try {
@@ -138,29 +139,19 @@ Gelen Veri Paketi:
 ${JSON.stringify(topDeltaPackages)}
 `;
 
-      const response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${apiKey}`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            contents: [{ parts: [{ text: masterPrompt }] }],
-            generationConfig: { temperature: 0.1, responseMimeType: "application/json" },
-          }),
-        }
-      );
+      const geminiResult = await callGeminiNext({
+        apiKey,
+        prompt: masterPrompt,
+        temperature: 0.1,
+        model: 'gemini-3.5-flash',
+      });
 
-      if (!response.ok) {
-        const errText = await response.text();
-        console.error('Gemini API Error:', errText);
+      if (!geminiResult.success) {
+        console.error('Gemini API Error:', geminiResult.error);
         return NextResponse.json({ error: 'Gemini API call failed' }, { status: 500 });
       }
 
-      const responseData = await response.json();
-      let responseText = responseData.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
-      
-      responseText = responseText.replace(/```json/g, '').replace(/```/g, '').trim();
-      const parsedInsights = JSON.parse(responseText);
+      const parsedInsights = parseGeminiJSON(geminiResult.text);
 
       // Inject insights back into dashboardData
       dashboardData.departments.forEach((dept: any) => {

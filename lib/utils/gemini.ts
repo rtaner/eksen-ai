@@ -1,30 +1,33 @@
-// Gemini API Wrapper for Deno Edge Functions
+// Gemini API Wrapper for Next.js Server Routes with Retries and Fallbacks
 
-export interface GeminiConfig {
+export interface GeminiNextConfig {
   apiKey: string;
-  model?: string;
+  prompt: string;
+  pdfBase64?: string;
+  responseSchema?: any;
   temperature?: number;
-  maxOutputTokens?: number;
+  model?: string;
 }
 
-export interface GeminiResponse {
+export interface GeminiNextResponse {
   text: string;
   success: boolean;
   error?: string;
 }
 
 /**
- * Call Gemini API with a prompt
+ * Call Gemini API with retries and fallback models
  */
-export async function callGemini(
-  prompt: string,
-  config: GeminiConfig
-): Promise<GeminiResponse> {
+export async function callGeminiNext(
+  config: GeminiNextConfig
+): Promise<GeminiNextResponse> {
   const {
     apiKey,
-    model = 'gemini-2.5-flash',
-    temperature = 0.7,
-    maxOutputTokens = 16384,
+    prompt,
+    pdfBase64,
+    responseSchema,
+    temperature = 0.1,
+    model = 'gemini-3.5-flash',
   } = config;
 
   // Determine model list to try in order
@@ -42,34 +45,36 @@ export async function callGemini(
   for (const currentModel of modelsToTry) {
     for (let attempt = 0; attempt < maxRetries; attempt++) {
       try {
-        console.log(`[Gemini API] Calling model ${currentModel} (Attempt ${attempt + 1}/${maxRetries})...`);
-        const response = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/${currentModel}:generateContent?key=${apiKey}`,
-          {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
+        console.log(`[Next.js Gemini] Calling model ${currentModel} (Attempt ${attempt + 1}/${maxRetries})...`);
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/${currentModel}:generateContent?key=${apiKey}`;
+        
+        const parts: any[] = [{ text: prompt }];
+        if (pdfBase64) {
+          parts.push({
+            inlineData: {
+              mimeType: 'application/pdf',
+              data: pdfBase64,
             },
-            body: JSON.stringify({
-              contents: [
-                {
-                  parts: [
-                    {
-                      text: prompt,
-                    },
-                  ],
-                },
-              ],
-              generationConfig: {
-                temperature,
-                maxOutputTokens,
-                topP: 0.95,
-                topK: 40,
-                responseMimeType: "application/json",
-              },
-            }),
-          }
-        );
+          });
+        }
+
+        const body: any = {
+          contents: [{ parts }],
+          generationConfig: {
+            temperature,
+            responseMimeType: "application/json",
+          },
+        };
+
+        if (responseSchema) {
+          body.generationConfig.responseSchema = responseSchema;
+        }
+
+        const response = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
 
         if (!response.ok) {
           let errorMsg = `Status ${response.status}`;
@@ -91,7 +96,7 @@ export async function callGemini(
           throw new Error('No text in Gemini response');
         }
 
-        console.log(`[Gemini API] Successfully received response from ${currentModel}`);
+        console.log(`[Next.js Gemini] Successfully received response from ${currentModel}`);
         return {
           text,
           success: true,
@@ -99,7 +104,7 @@ export async function callGemini(
       } catch (error: any) {
         lastError = error;
         console.warn(
-          `[Gemini API] Model ${currentModel} failed on attempt ${attempt + 1}/${maxRetries}: ${error.message}`
+          `[Next.js Gemini] Model ${currentModel} failed on attempt ${attempt + 1}/${maxRetries}: ${error.message}`
         );
 
         // Don't wait on the last attempt of the last model
@@ -108,11 +113,11 @@ export async function callGemini(
         }
 
         const delay = baseDelay * Math.pow(2, attempt);
-        console.log(`[Gemini API] Retrying in ${delay}ms...`);
+        console.log(`[Next.js Gemini] Retrying in ${delay}ms...`);
         await new Promise((resolve) => setTimeout(resolve, delay));
       }
     }
-    console.warn(`[Gemini API] Model ${currentModel} exhausted. Falling back to next available model...`);
+    console.warn(`[Next.js Gemini] Model ${currentModel} exhausted. Falling back to next available model...`);
   }
 
   return {
@@ -124,13 +129,9 @@ export async function callGemini(
 
 /**
  * Parse JSON from Gemini response
- * Handles cases where Gemini wraps JSON in markdown code blocks
  */
-export function parseGeminiJSON<T>(text: string): T {
-  // Remove markdown code blocks if present
+export function parseGeminiJSON(text: string): any {
   let cleanText = text.trim();
-  
-  // Remove ```json and ``` markers
   if (cleanText.startsWith('```json')) {
     cleanText = cleanText.replace(/^```json\s*/, '').replace(/```\s*$/, '');
   } else if (cleanText.startsWith('```')) {
@@ -138,7 +139,7 @@ export function parseGeminiJSON<T>(text: string): T {
   }
 
   try {
-    return JSON.parse(cleanText.trim()) as T;
+    return JSON.parse(cleanText.trim());
   } catch (error) {
     console.error('Failed to parse Gemini JSON:', cleanText);
     throw new Error(`Invalid JSON from Gemini: ${error instanceof Error ? error.message : 'Unknown error'}`);

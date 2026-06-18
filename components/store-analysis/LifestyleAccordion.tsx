@@ -10,9 +10,17 @@ interface LifestyleAccordionProps {
   isOpen?: boolean;
   onToggle?: () => void;
   storeAverageCover?: number;
+  hasAIAnalysis?: boolean;
 }
 
-export default function LifestyleAccordion({ node, isClass = false, isOpen: controlledIsOpen, onToggle, storeAverageCover = 0 }: LifestyleAccordionProps) {
+export default function LifestyleAccordion({ 
+  node, 
+  isClass = false, 
+  isOpen: controlledIsOpen, 
+  onToggle, 
+  storeAverageCover = 0,
+  hasAIAnalysis = false
+}: LifestyleAccordionProps) {
   const [internalIsOpen, setInternalIsOpen] = useState(false);
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
 

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { processStoreData, RawStoreDataRow, getPreProcessedDeltas } from '@/lib/services/store-analysis-engine';
 import * as xlsx from 'xlsx';
+import { callGeminiNext, parseGeminiJSON } from '@/lib/utils/gemini';
 
 export async function POST(request: NextRequest) {
   try {
@@ -63,51 +64,31 @@ export async function POST(request: NextRequest) {
 
       const rowsPrompt = `Extract the tabular data from this store dashboard PDF into a JSON array of objects. The PDF contains rows representing 'Departments' (e.g. WOMAN, MAN totals), 'Groups' (or Lifestyles) like Casual, Young, 'Classes' like Trousers, Shirts, and 'Buyers' (or Sub-Categories like Woven Top, Knitted). Extract ALL of these rows as separate objects in the array. Do not summarize or truncate the list. Map the values to this exact schema: { "Department": "string", "RowType": "string", "Name": "string", "StoreSalesPct": number, "RegionSalesPct": number, "SalesAmountLFLPct": number, "StockQtyLFLPct": number, "SalesQuantityLFLPct": number, "Cover": number, "OnWay": number, "NetFinalOccupancyPct": number, "SalesAmount": number }. For percentage values, extract them as numbers (e.g., %25.5 -> 25.5). If missing or "Boş", use 0. Return ONLY the raw JSON array, without any markdown blocks or explanation.`;
 
-      const [metricsResponse, rowsResponse] = await Promise.all([
-        fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${apiKey}`,
-          {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              contents: [{ parts: [{ text: metricsPrompt }, { inlineData: { mimeType: 'application/pdf', data: base64Data } }] }],
-              generationConfig: { temperature: 0.1, responseMimeType: "application/json" },
-            }),
-          }
-        ),
-        fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${apiKey}`,
-          {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              contents: [{ parts: [{ text: rowsPrompt }, { inlineData: { mimeType: 'application/pdf', data: base64Data } }] }],
-              generationConfig: { temperature: 0.1, responseMimeType: "application/json" },
-            }),
-          }
-        )
+      const [metricsResult, rowsResult] = await Promise.all([
+        callGeminiNext({
+          apiKey,
+          prompt: metricsPrompt,
+          pdfBase64: base64Data,
+          temperature: 0.1,
+          model: 'gemini-3.5-flash',
+        }),
+        callGeminiNext({
+          apiKey,
+          prompt: rowsPrompt,
+          pdfBase64: base64Data,
+          temperature: 0.1,
+          model: 'gemini-3.5-flash',
+        })
       ]);
 
-      if (!metricsResponse.ok || !rowsResponse.ok) {
-        console.error('Gemini API Error - Metrics:', await metricsResponse.text(), 'Rows:', await rowsResponse.text());
+      if (!metricsResult.success || !rowsResult.success) {
+        console.error('Gemini API Error - Metrics:', metricsResult.error, 'Rows:', rowsResult.error);
         return NextResponse.json({ error: 'Failed to extract data from PDF using AI' }, { status: 500 });
       }
 
-      const metricsData = await metricsResponse.json();
-      const rowsData = await rowsResponse.json();
-
-      let metricsText = metricsData.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
-      let rowsText = rowsData.candidates?.[0]?.content?.parts?.[0]?.text || '[]';
-      
-      if (metricsText.startsWith('```json')) metricsText = metricsText.replace(/^```json\s*/, '').replace(/```\s*$/, '');
-      else if (metricsText.startsWith('```')) metricsText = metricsText.replace(/^```\s*/, '').replace(/```\s*$/, '');
-
-      if (rowsText.startsWith('```json')) rowsText = rowsText.replace(/^```json\s*/, '').replace(/```\s*$/, '');
-      else if (rowsText.startsWith('```')) rowsText = rowsText.replace(/^```\s*/, '').replace(/```\s*$/, '');
-
       try {
-        storeMetrics = JSON.parse(metricsText);
-        rawRows = JSON.parse(rowsText);
+        storeMetrics = parseGeminiJSON(metricsResult.text);
+        rawRows = parseGeminiJSON(rowsResult.text);
         if (!Array.isArray(rawRows)) {
           rawRows = [];
         }
@@ -228,31 +209,15 @@ Gelen Veri Paketi:
 ${JSON.stringify(topDeltaPackages)}
 `;
 
-          const controller = new AbortController();
-          const timeoutId = setTimeout(() => controller.abort(), 120000); // 120s timeout
+          const geminiResult = await callGeminiNext({
+            apiKey,
+            prompt: masterPrompt,
+            temperature: 0.1,
+            model: 'gemini-3.5-flash',
+          });
 
-          const deepResponse = await fetch(
-            `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${apiKey}`,
-            {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              signal: controller.signal,
-              body: JSON.stringify({
-                contents: [{ parts: [{ text: masterPrompt }] }],
-                generationConfig: { temperature: 0.1, responseMimeType: "application/json" },
-              }),
-            }
-          );
-          clearTimeout(timeoutId);
-
-          if (deepResponse.ok) {
-            const deepData = await deepResponse.json();
-            let deepText = deepData.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
-            
-            if (deepText.startsWith('\`\`\`json')) deepText = deepText.replace(/^\`\`\`json\s*/, '').replace(/\`\`\`\s*$/, '');
-            else if (deepText.startsWith('\`\`\`')) deepText = deepText.replace(/^\`\`\`\s*/, '').replace(/\`\`\`\s*$/, '');
-
-            const parsedInsights = JSON.parse(deepText);
+          if (geminiResult.success) {
+            const parsedInsights = parseGeminiJSON(geminiResult.text);
 
             // Inject insights back into dashboardData
             dashboardData.departments.forEach(dept => {

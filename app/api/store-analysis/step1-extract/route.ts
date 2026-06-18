@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { processStoreData, RawStoreDataRow, getPreProcessedDeltas } from '@/lib/services/store-analysis-engine';
 import * as xlsx from 'xlsx';
+import { callGeminiNext, parseGeminiJSON } from '@/lib/utils/gemini';
 
 export async function POST(request: NextRequest) {
   try {
@@ -109,32 +110,22 @@ For percentage values, extract them as plain numbers (e.g., %25.5 -> 25.5). If m
       };
 
       console.log('Extracting metrics and rows from PDF in a single call...');
-      const response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${apiKey}`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            contents: [{ parts: [{ text: prompt }, { inlineData: { mimeType: 'application/pdf', data: base64Data } }] }],
-            generationConfig: { 
-              temperature: 0.1, 
-              responseMimeType: "application/json",
-              responseSchema: responseSchema
-            },
-          }),
-        }
-      );
+      const geminiResult = await callGeminiNext({
+        apiKey,
+        prompt,
+        pdfBase64: base64Data,
+        responseSchema,
+        temperature: 0.1,
+        model: 'gemini-3.5-flash',
+      });
 
-      if (!response.ok) {
-        console.error('Gemini API Error:', await response.text());
+      if (!geminiResult.success) {
+        console.error('Gemini API Error:', geminiResult.error);
         return NextResponse.json({ error: 'Failed to extract data from PDF using AI' }, { status: 500 });
       }
 
-      const responseData = await response.json();
-      const responseText = responseData.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
-      
       try {
-        const parsedData = JSON.parse(responseText);
+        const parsedData = parseGeminiJSON(geminiResult.text);
         storeMetrics = parsedData.metrics || null;
         rawRows = parsedData.rows || [];
         if (!Array.isArray(rawRows)) {

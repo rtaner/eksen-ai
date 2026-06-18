@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getPreProcessedDeltas } from '@/lib/services/store-analysis-engine';
+import { callGeminiNext, parseGeminiJSON } from '@/lib/utils/gemini';
 
 export async function POST(request: NextRequest) {
   try {
@@ -96,36 +97,20 @@ Gelen Veri Paketi:
 ${JSON.stringify(topDeltaPackages)}
 `;
 
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 240000); // 4 minute timeout for this step
+      const geminiResult = await callGeminiNext({
+        apiKey,
+        prompt: masterPrompt,
+        temperature: 0.1,
+        model: 'gemini-3.5-flash',
+      });
 
-      const deepResponse = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${apiKey}`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          signal: controller.signal,
-          body: JSON.stringify({
-            contents: [{ parts: [{ text: masterPrompt }] }],
-            generationConfig: { temperature: 0.1, responseMimeType: "application/json" },
-          }),
-        }
-      );
-      clearTimeout(timeoutId);
-
-      if (!deepResponse.ok) {
-        console.error('Gemini API Error (Deep Insight):', await deepResponse.text());
+      if (!geminiResult.success) {
+        console.error('Gemini API Error (Deep Insight):', geminiResult.error);
         return NextResponse.json({ error: 'Failed to generate deep insights' }, { status: 500 });
       }
 
-      const deepData = await deepResponse.json();
-      let deepText = deepData.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
-      
-      if (deepText.startsWith('\`\`\`json')) deepText = deepText.replace(/^\`\`\`json\s*/, '').replace(/\`\`\`\s*$/, '');
-      else if (deepText.startsWith('\`\`\`')) deepText = deepText.replace(/^\`\`\`\s*/, '').replace(/\`\`\`\s*$/, '');
-
       try {
-        parsedInsights = JSON.parse(deepText);
+        parsedInsights = parseGeminiJSON(geminiResult.text);
       } catch (e) {
         console.error('Failed to parse Deep Insight JSON:', e);
       }
