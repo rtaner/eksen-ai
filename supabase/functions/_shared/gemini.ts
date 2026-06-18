@@ -5,6 +5,7 @@ export interface GeminiConfig {
   model?: string;
   temperature?: number;
   maxOutputTokens?: number;
+  responseMimeType?: string;
 }
 
 export interface GeminiResponse {
@@ -25,6 +26,7 @@ export async function callGemini(
     model = 'gemini-2.5-flash',
     temperature = 0.7,
     maxOutputTokens = 16384,
+    responseMimeType = 'application/json',
   } = config;
 
   // Determine model list to try in order
@@ -65,7 +67,7 @@ export async function callGemini(
                 maxOutputTokens,
                 topP: 0.95,
                 topK: 40,
-                responseMimeType: "application/json",
+                responseMimeType,
               },
             }),
           }

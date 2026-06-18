@@ -228,6 +228,7 @@ Markdown çıktısında profesyonel bir dil kullan, gereksiz cümlelerden kaçı
       apiKey: geminiApiKey,
       model: 'gemini-3.5-flash',
       temperature: 0.2,
+      responseMimeType: 'text/plain',
     });
 
     if (!geminiResponse.success) {
