@@ -8,6 +8,7 @@ import Modal from '@/components/ui/Modal';
 import ChecklistTemplateCard from './ChecklistTemplateCard';
 import ChecklistExecutionModal from './ChecklistExecutionModal';
 import type { Checklist } from '@/lib/types';
+import { createClient } from '@/lib/supabase/client';
 
 export default function ChecklistsClient() {
   const { checklists, isLoading } = useChecklists();
@@ -54,22 +55,20 @@ export default function ChecklistsClient() {
     setAnalysisResult(null);
 
     try {
-      const response = await fetch('/api/checklists/analyze', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+      const supabase = createClient();
+      const { data, error } = await supabase.functions.invoke('analyze-reyon', {
+        body: {
           checklistId: selectedAnalysisChecklistId,
           dateRangeStart,
           dateRangeEnd,
-        }),
+        },
       });
 
-      const data = await response.json();
-      if (!response.ok) {
-        throw new Error(data.error || 'Analiz oluşturulurken bir hata oluştu');
+      if (error) {
+        throw error;
       }
 
-      if (data.success === false) {
+      if (data && data.success === false) {
         throw new Error(data.error || 'Analiz oluşturulamadı');
       }
 

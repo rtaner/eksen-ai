@@ -1,21 +1,25 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
-import { callGeminiNext } from '@/lib/utils/gemini';
+import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
+import { corsHeaders } from '../_shared/cors.ts';
+import { validateUser } from '../_shared/supabase-client.ts';
+import { callGemini } from '../_shared/gemini.ts';
 
-export async function POST(request: NextRequest) {
+serve(async (req) => {
+  // Handle CORS
+  if (req.method === 'OPTIONS') {
+    return new Response('ok', { headers: corsHeaders });
+  }
+
   try {
-    const supabase = await createClient();
+    const authHeader = req.headers.get('Authorization');
+    const { user, supabase } = await validateUser(authHeader);
 
-    // Verify user
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    const { checklistId, dateRangeStart, dateRangeEnd } = await request.json();
+    const { checklistId, dateRangeStart, dateRangeEnd } = await req.json();
 
     if (!checklistId || !dateRangeStart || !dateRangeEnd) {
-      return NextResponse.json({ error: 'Missing required parameters' }, { status: 400 });
+      return new Response(
+        JSON.stringify({ error: 'Missing required parameters: checklistId, dateRangeStart, dateRangeEnd' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
     }
 
     // 1. Fetch checklist details
@@ -26,11 +30,13 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (checklistError || !checklist) {
-      return NextResponse.json({ error: 'Checklist not found' }, { status: 404 });
+      return new Response(
+        JSON.stringify({ error: 'Checklist not found' }),
+        { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
     }
 
     const items = checklist.items || [];
-    const itemsMap = new Map(items.map((item: any) => [item.id, item]));
 
     // 2. Fetch checklist results inside date range
     const { data: results, error: resultsError } = await supabase
@@ -55,14 +61,17 @@ export async function POST(request: NextRequest) {
 
     if (resultsError) {
       console.error('Error fetching checklist results:', resultsError);
-      return NextResponse.json({ error: 'Failed to fetch checklist results' }, { status: 500 });
+      throw resultsError;
     }
 
     if (!results || results.length === 0) {
-      return NextResponse.json({
-        success: false,
-        error: 'Seçilen tarih aralığında doldurulmuş checklist sonucu bulunamadı.',
-      });
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: 'Seçilen tarih aralığında doldurulmuş checklist sonucu bulunamadı.',
+        }),
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
     }
 
     // 3. Fetch checklist assignments to map checklist result to personnel
@@ -75,7 +84,7 @@ export async function POST(request: NextRequest) {
           name
         )
       `)
-      .in('checklist_result_id', results.map(r => r.id));
+      .in('checklist_result_id', results.map((r: any) => r.id));
 
     if (assignmentsError) {
       console.error('Error fetching assignments:', assignmentsError);
@@ -150,12 +159,12 @@ export async function POST(request: NextRequest) {
         runsCount: stat.count,
         completionRate: Number(((stat.completedItemsCount / stat.totalItemsCount) * 100).toFixed(1)),
       };
-    }).sort((a, b) => b.averageScore - a.averageScore);
+    }).sort((a: any, b: any) => b.averageScore - a.averageScore);
 
     // 5. Structure prompt for Gemini
-    const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey) {
-      return NextResponse.json({ error: 'GEMINI_API_KEY is not configured on the server.' }, { status: 500 });
+    const geminiApiKey = Deno.env.get('GEMINI_API_KEY');
+    if (!geminiApiKey) {
+      throw new Error('GEMINI_API_KEY not configured on Supabase');
     }
 
     // Format details of each run for the prompt
@@ -215,30 +224,43 @@ Lütfen analiz raporunu profesyonel ve yöneticiye sunulacak kalitede, Türkçe 
 
 Markdown çıktısında profesyonel bir dil kullan, gereksiz cümlelerden kaçın ve verileri analiz ederek doğrudan aksiyona yönelik çıktılar üret.`;
 
-    const geminiResult = await callGeminiNext({
-      apiKey,
-      prompt,
-      temperature: 0.2,
+    const geminiResponse = await callGemini(prompt, {
+      apiKey: geminiApiKey,
       model: 'gemini-3.5-flash',
+      temperature: 0.2,
     });
 
-    if (!geminiResult.success) {
-      return NextResponse.json({ error: 'Gemini analizi oluşturulamadı: ' + geminiResult.error }, { status: 500 });
+    if (!geminiResponse.success) {
+      throw new Error(`Gemini reyon analiz hatası: ${geminiResponse.error}`);
     }
 
-    return NextResponse.json({
-      success: true,
-      stats: {
-        totalCount,
-        averageScore: Number(averageScore.toFixed(2)),
-        itemStats,
-        personnelStats,
-      },
-      analysis: geminiResult.text,
-    });
+    return new Response(
+      JSON.stringify({
+        success: true,
+        stats: {
+          totalCount,
+          averageScore: Number(averageScore.toFixed(2)),
+          itemStats,
+          personnelStats,
+        },
+        analysis: geminiResponse.text,
+      }),
+      {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      }
+    );
 
   } catch (error: any) {
-    console.error('Checklist analysis error:', error);
-    return NextResponse.json({ error: error.message || 'An error occurred during checklist analysis' }, { status: 500 });
+    console.error('Reyon analiz edge function hatası:', error);
+    return new Response(
+      JSON.stringify({
+        success: false,
+        error: error.message || 'Bilinmeyen hata',
+      }),
+      {
+        status: 200,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      }
+    );
   }
-}
+});
