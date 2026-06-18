@@ -28,7 +28,9 @@ export interface ChecklistResult {
   checklist_snapshot: {
     title: string;
     description?: string;
+    items?: Array<{ id: string; text: string; order: number }>;
   };
+  completed_items: string[];
   score: number;
   closing_note?: string;
   completed_at: string;
@@ -41,8 +43,8 @@ export interface ChecklistResult {
 export function formatDataForPrompt(
   notes: Note[],
   tasks: Task[],
-  checklists: ChecklistResult[],
-  authorNames: AuthorInfo
+  checklistsOrAuthorNames?: ChecklistResult[] | AuthorInfo,
+  authorNames?: AuthorInfo
 ): {
   notesJSON: string;
   tasksJSON: string;
@@ -50,6 +52,16 @@ export function formatDataForPrompt(
   closedTasksCount: number;
   checklistsCount: number;
 } {
+  let checklists: ChecklistResult[] = [];
+  let actualAuthorNames: AuthorInfo = {};
+
+  if (Array.isArray(checklistsOrAuthorNames)) {
+    checklists = checklistsOrAuthorNames;
+    actualAuthorNames = authorNames || {};
+  } else if (checklistsOrAuthorNames) {
+    actualAuthorNames = checklistsOrAuthorNames as AuthorInfo;
+  }
+
   // Filter closed tasks only
   const closedTasks = tasks.filter((t) => t.status === 'closed' && t.star_rating);
 
@@ -59,7 +71,7 @@ export function formatDataForPrompt(
     tip: 'not',
     icerik: note.content,
     duygu: note.sentiment === 'positive' ? 'olumlu' : note.sentiment === 'negative' ? 'olumsuz' : 'notr',
-    giren_yonetici: authorNames[note.author_id] || 'Bilinmeyen',
+    giren_yonetici: actualAuthorNames[note.author_id] || 'Bilinmeyen',
     sesli_not: note.is_voice_note,
   }));
 
@@ -71,14 +83,29 @@ export function formatDataForPrompt(
     puan: task.star_rating,
   }));
 
-  // Format checklists for JSON
-  const formattedChecklists = checklists.map((checklist) => ({
-    tarih: new Date(checklist.completed_at).toLocaleDateString('tr-TR'),
-    tip: 'checklist',
-    icerik: `[${checklist.checklist_snapshot?.title || 'Checklist'}] ${checklist.closing_note ? 'Not: ' + checklist.closing_note : ''}`,
-    puan: checklist.score || 0, // 0-100 scale
-    degerlendiren: checklist.completed_by ? (authorNames[checklist.completed_by] || 'Bilinmeyen') : 'Sistem',
-  }));
+  // Format checklists for JSON (including items completed/not completed details)
+  const formattedChecklists = checklists.map((checklist) => {
+    const itemsList = (checklist.checklist_snapshot?.items || [])
+      .sort((a: any, b: any) => a.order - b.order)
+      .map((item: any) => {
+        const isCompleted = (checklist.completed_items || []).includes(item.id);
+        return `- ${item.order}. ${item.text}: ${isCompleted ? '✓ Tamamlandı' : '✗ Tamamlanmadı'}`;
+      })
+      .join('\n');
+
+    const content = `[Checklist: ${checklist.checklist_snapshot?.title || 'Checklist'}]
+Maddeler:
+${itemsList || 'Madde bulunmuyor'}
+${checklist.closing_note ? 'Yönetici Notu: ' + checklist.closing_note : ''}`;
+
+    return {
+      tarih: new Date(checklist.completed_at).toLocaleDateString('tr-TR'),
+      tip: 'checklist',
+      icerik: content,
+      puan: checklist.score || 0, // 0-5 scale
+      degerlendiren: checklist.completed_by ? (actualAuthorNames[checklist.completed_by] || 'Bilinmeyen') : 'Sistem',
+    };
+  });
 
   // Combine and sort by date
   const allData = [...formattedNotes, ...formattedTasks, ...formattedChecklists].sort((a, b) => {

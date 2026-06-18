@@ -75,6 +75,7 @@ serve(async (req) => {
         checklist_result:checklist_results (
           id,
           checklist_snapshot,
+          completed_items,
           score,
           closing_note,
           completed_at,
