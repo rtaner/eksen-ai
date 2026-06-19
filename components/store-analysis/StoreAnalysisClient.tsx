@@ -26,10 +26,45 @@ export default function StoreAnalysisClient({ historyAnalyses, isOwner }: StoreA
   const data = currentAnalysis?.dashboard_data || null;
   const lastUpdate = currentAnalysis?.created_at || null;
   
+  const getTrendData = (
+    deptName: string,
+    type: 'Lifestyle' | 'Buyer' | 'Class',
+    nodeName: string,
+    currentSalesPct: number
+  ) => {
+    const prevAnalysis = analyses[selectedIndex + 1];
+    if (!prevAnalysis) return null;
+    const prevDept = prevAnalysis.dashboard_data.departments?.find(d => d.name === deptName);
+    if (!prevDept) return null;
+
+    let prevNode: any = null;
+    if (type === 'Lifestyle') {
+      prevNode = prevDept.lifestyles?.find((n: any) => n.name === nodeName || n.Name === nodeName);
+    } else if (type === 'Buyer') {
+      prevNode = prevDept.buyers?.find((n: any) => n.name === nodeName || n.Name === nodeName);
+    } else if (type === 'Class') {
+      prevNode = prevDept.classes?.find((n: any) => n.name === nodeName || n.Name === nodeName);
+    }
+
+    if (!prevNode) return null;
+
+    const prevSalesPct = Number(prevNode.StoreSalesPct || prevNode.storeSalesPct || 0);
+    const diff = currentSalesPct - prevSalesPct;
+    let direction: 'up' | 'down' | 'stable' = 'stable';
+    if (diff > 0.3) {
+      direction = 'up';
+    } else if (diff < -0.3) {
+      direction = 'down';
+    }
+
+    return { direction, diff };
+  };
+
   const [isUploading, setIsUploading] = useState(false);
   const [progressMsg, setProgressMsg] = useState<string>('');
   const [selectedDept, setSelectedDept] = useState<string | null>(data?.departments[0]?.name || null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [isExecReportOpen, setIsExecReportOpen] = useState(false);
 
   const hasAIAnalysis = data && data.departments && data.departments.some((dept: any) => 
     (dept.lifestyles || []).some((ls: any) => ls.deepInsight) || 
@@ -326,6 +361,89 @@ export default function StoreAnalysisClient({ historyAnalyses, isOwner }: StoreA
         </div>
       )}
 
+      {/* Executive Insight Report */}
+      {data.executiveReport && (
+        <div className="bg-gradient-to-br from-blue-50/40 via-white to-purple-50/40 rounded-xl shadow-sm border border-blue-100 p-6 transition-all duration-200">
+          <div 
+            onClick={() => setIsExecReportOpen(!isExecReportOpen)}
+            className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 cursor-pointer hover:bg-blue-50/30 p-2 -m-2 rounded-lg transition-colors"
+          >
+            <div className="flex-1">
+              <h2 className="text-lg font-extrabold text-gray-900 flex items-center gap-2">
+                <span>🎯</span> Mağaza Yönetici Teşhis & Aksiyon Raporu
+                <span className="px-2 py-0.5 bg-blue-50 text-blue-700 text-[10px] font-bold rounded-full border border-blue-100 hidden sm:inline-block">
+                  Executive AI Strategist
+                </span>
+              </h2>
+              <p className="text-xs text-gray-500 mt-0.5">
+                Lokasyon dinamikleri (Bozüyük transit trafiği), takvim/mevsim şartları ve haftalık verilerle otomatik oluşturulmuştur.
+              </p>
+            </div>
+            
+            <div className="flex items-center gap-3 shrink-0 self-end sm:self-center">
+              <span className="px-2.5 py-1 bg-blue-50 text-blue-700 text-xs font-bold rounded-full border border-blue-100 sm:hidden">
+                AI Strategist
+              </span>
+              <svg 
+                className={`w-5 h-5 text-gray-400 transform transition-transform duration-200 ${isExecReportOpen ? 'rotate-180' : ''}`} 
+                fill="none" viewBox="0 0 24 24" stroke="currentColor"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+            </div>
+          </div>
+
+          {isExecReportOpen && (
+            <div className="space-y-6 mt-6 pt-4 border-t border-gray-100">
+              {/* Executive Summary */}
+              <div className="bg-blue-50/30 p-4 rounded-xl border border-blue-100/40">
+                <span className="font-bold text-xs uppercase tracking-wider text-blue-700 mb-2 block">📊 Yönetici Özeti</span>
+                <p className="text-sm font-semibold text-gray-800 leading-relaxed">
+                  {data.executiveReport.executive_summary}
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {/* Diagnoses */}
+                <div className="bg-white p-5 rounded-xl border border-gray-200/80 shadow-xs flex flex-col gap-4">
+                  <span className="font-bold text-xs uppercase tracking-wider text-gray-500 mb-1 block">🔍 Stratejik Teşhisler</span>
+                  <div className="flex flex-col gap-4">
+                    {data.executiveReport.diagnoses?.map((diag: { title: string; description: string }, idx: number) => (
+                      <div key={idx} className="bg-amber-50/40 p-4 rounded-lg border border-amber-100/80 flex gap-3 items-start">
+                        <span className="text-lg shrink-0">⚠️</span>
+                        <div>
+                          <h4 className="font-bold text-sm text-amber-950">{diag.title}</h4>
+                          <p className="text-xs text-amber-900 mt-1 leading-relaxed">{diag.description}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Action Plans */}
+                <div className="bg-white p-5 rounded-xl border border-gray-200/80 shadow-xs flex flex-col gap-4">
+                  <span className="font-bold text-xs uppercase tracking-wider text-gray-500 mb-1 block">🎯 Hedefli Aksiyon Planları</span>
+                  <div className="flex flex-col gap-4">
+                    {data.executiveReport.action_plans?.map((plan: { area: string; actions: string[] }, idx: number) => (
+                      <div key={idx} className="bg-green-50/40 p-4 rounded-lg border border-green-100/80 flex flex-col gap-2">
+                        <h4 className="font-bold text-sm text-green-950 flex items-center gap-1.5">
+                          <span className="text-xs">⚡</span> {plan.area}
+                        </h4>
+                        <ul className="list-disc list-inside text-xs text-green-900 space-y-1.5 pl-1">
+                          {plan.actions?.map((act: string, aIdx: number) => (
+                            <li key={aIdx} className="leading-relaxed">{act}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Merch Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {data.departments.map(dept => (
@@ -426,8 +544,8 @@ export default function StoreAnalysisClient({ historyAnalyses, isOwner }: StoreA
                 {activeTab === 'lifestyles' ? 'Lifestyles' : activeTab === 'buyers' ? 'Buyers' : 'Classes'}
               </h2>
               <div className="hidden sm:flex gap-4 text-xs font-medium text-gray-500">
-                <span className="flex items-center"><div className="w-2 h-2 rounded-full bg-green-500 mr-2"></div> Pazar Payı Yüksek</span>
-                <span className="flex items-center"><div className="w-2 h-2 rounded-full bg-red-500 mr-2"></div> Pazar Payı Düşük</span>
+                <span className="flex items-center"><div className="w-2 h-2 rounded-full bg-green-500 mr-2"></div> Satış Payı Yüksek</span>
+                <span className="flex items-center"><div className="w-2 h-2 rounded-full bg-red-500 mr-2"></div> Satış Payı Düşük</span>
               </div>
             </div>
             
@@ -443,6 +561,7 @@ export default function StoreAnalysisClient({ historyAnalyses, isOwner }: StoreA
                       isOpen={openLifestyleIdx === idx}
                       onToggle={() => setOpenLifestyleIdx(openLifestyleIdx === idx ? null : idx)}
                       storeAverageCover={data.storeAverageCover || 0}
+                      trend={getTrendData(currentDept.name, 'Lifestyle', lifestyle.name || lifestyle.Name || '', lifestyle.StoreSalesPct || 0)}
                     />
                   ))
                 ) : (
@@ -461,6 +580,7 @@ export default function StoreAnalysisClient({ historyAnalyses, isOwner }: StoreA
                       isOpen={openBuyerIdx === idx}
                       onToggle={() => setOpenBuyerIdx(openBuyerIdx === idx ? null : idx)}
                       storeAverageCover={data.storeAverageCover || 0}
+                      trend={getTrendData(currentDept.name, 'Buyer', buyer.name || buyer.Name || '', buyer.StoreSalesPct || 0)}
                     />
                   ))
                 ) : (
@@ -479,6 +599,7 @@ export default function StoreAnalysisClient({ historyAnalyses, isOwner }: StoreA
                       isOpen={openClassIdx === idx}
                       onToggle={() => setOpenClassIdx(openClassIdx === idx ? null : idx)}
                       storeAverageCover={data.storeAverageCover || 0}
+                      trend={getTrendData(currentDept.name, 'Class', cls.name || cls.Name || '', cls.StoreSalesPct || 0)}
                     />
                   ))
                 ) : (

@@ -15,7 +15,9 @@ export interface RawStoreDataRow {
   NetFinalOccupancyPct: number; // Kapasite %
   SalesAmount: number; // Toplam Ciro hesaplamak için
   SalesAmountPct: number; // Stock - Sales Amount %
+  StockCostPct?: number; // Stock Cost %
   OnHandQty: number; // Stock Qty OnHand
+  SalesQuantity?: number; // Sales Quantity in pieces
 }
 
 export interface AnalysisInsight {
@@ -66,6 +68,8 @@ export interface DepartmentNode {
   OnHandQty?: number;
   OnWay?: number;
   NetFinalOccupancyPct?: number;
+  StockCostPct?: number;
+  SalesQuantity?: number;
   lifestyles: LifestyleNode[];
   classes: ClassNode[];
   buyers: BuyerNode[];
@@ -91,6 +95,11 @@ export interface ProcessedStoreDashboard {
   generatedAt: string;
   analysisType?: 'strict' | 'free';
   storeAverageCover?: number;
+  executiveReport?: {
+    executive_summary: string;
+    diagnoses: Array<{ title: string; description: string }>;
+    action_plans: Array<{ area: string; actions: string[] }>;
+  };
 }
 
 /**
@@ -224,9 +233,11 @@ export function processStoreData(rawRows: any[]): ProcessedStoreDashboard {
       Cover: Number(raw.Cover || raw.cover || 0),
       OnWay: Number(raw.OnWay || raw.onWay || 0),
       NetFinalOccupancyPct: Number(raw.NetFinalOccupancyPct || raw.netFinalOccupancyPct || 0),
+      StockCostPct: Number(raw.StockCostPct || raw.stockCostPct || raw.stockCost || 0),
       SalesAmount: Number(raw.SalesAmount || raw.salesAmount || 0),
       SalesAmountPct: Number(raw.SalesAmountPct || raw.salesAmountPct || 0),
-      OnHandQty: Number(raw.OnHandQty || raw.onHandQty || 0)
+      OnHandQty: Number(raw.OnHandQty || raw.onHandQty || 0),
+      SalesQuantity: Number(raw.SalesQuantity || raw.salesQuantity || raw.SalesQty || raw.salesQty || 0)
     };
 
     if (!deptMap.has(row.Department)) {
@@ -269,6 +280,8 @@ export function processStoreData(rawRows: any[]): ProcessedStoreDashboard {
       dept.OnHandQty = row.OnHandQty;
       dept.OnWay = row.OnWay;
       dept.NetFinalOccupancyPct = row.NetFinalOccupancyPct;
+      dept.StockCostPct = row.StockCostPct;
+      dept.SalesQuantity = row.SalesQuantity;
     } else if (rowType === 'Lifestyle' || rowType === 'Group') {
       dept.lifestyles.push({ ...row, insight, name: name });
     } else if (rowType === 'Buyer') {
@@ -326,8 +339,8 @@ export function getPreProcessedDeltas(node: RawStoreDataRow, type: string, store
   
   if (salesLFL - stockQtyLFL < -10) {
     priority = 1;
-    triggerTag = "[OPERASYONEL_KAYIP]";
-    triggerDesc = "Satış düşüşü stok daralmasından daha sert.";
+    triggerTag = "[VERİMSİZ_STOK]";
+    triggerDesc = "Stok büyümesi ciro büyümesini geride bırakmış (verimsiz stok).";
   } else if (salesLFL < 0 && stockQtyLFL < 0 && node.Cover < 5 && node.OnWay === 0) {
     priority = 2;
     triggerTag = "[YOK_SATMA_RISKI]";
@@ -340,22 +353,80 @@ export function getPreProcessedDeltas(node: RawStoreDataRow, type: string, store
     priority = 4;
     triggerTag = "[GIZLI_SAMPIYON]";
     triggerDesc = "Mağaza ortalamasından hızlı büyüyor ve dönüyor.";
+  } else if ((node.StoreSalesPct || 0) - (node.RegionSalesPct || 0) <= -2) {
+    priority = 5;
+    triggerTag = "[PAZAR_PAYI_KAYBI]";
+    triggerDesc = "Reyon pazar payı bölge ortalamasının %2 ve daha fazla gerisinde kalmış.";
   } else {
     triggerTag = "[NÖTR]";
     triggerDesc = "Spesifik bir tetikleyici alarm üretmedi.";
   }
 
   // Katman 2: Bağlam ve Eşik Etiketleri (Context)
-  const spaceScore = (node.StoreSalesPct || 0) - (node.NetFinalOccupancyPct || 0);
+  const spaceScore = (node.StoreSalesPct || 0) - (node.StockCostPct || 0);
   let spaceLabel = "";
-  if (spaceScore > 5) spaceLabel = "[GİZLİ KAHRAMAN]";
+  if (spaceScore > 5) spaceLabel = "[REYON YILDIZI]";
   else if (spaceScore > 2) spaceLabel = "[DENGELİ - POZİTİF]";
   else if (spaceScore > -2) spaceLabel = "[NÖTR]";
   else if (spaceScore > -5) spaceLabel = "[VERİMSİZ]";
-  else spaceLabel = "[ALAN ASALAĞI]";
+  else spaceLabel = "[STOK YÜKÜ]";
 
   const marketGap = (node.StoreSalesPct || 0) - (node.RegionSalesPct || 0);
   const velocityDev = storeAverageCover > 0 ? ((node.Cover || 0) / storeAverageCover).toFixed(2) : "Bilinmiyor";
+
+  // Bölgesel Satış Payı Farkı 4 Kademe
+  let marketShareLabel = "⚖️ Dengeli Satış";
+  let marketShareDesc = "Bölge ortalamasıyla dengeli ve uyumlu bir satış payı.";
+  if (marketGap <= -4) {
+    marketShareLabel = "🚨 Kritik Satış Kaybı";
+    marketShareDesc = "Bölge ortalamasının %4 ve üzerinde gerisinde, kritik satış kaybı yaşanıyor.";
+  } else if (marketGap <= -2) {
+    marketShareLabel = "⚠️ Satış Kaybı";
+    marketShareDesc = "Bölge ortalamasının %2 ile %4 arasında gerisinde, satış kaybı mevcut.";
+  } else if (marketGap >= 2) {
+    marketShareLabel = "📈 Güçlü Satış";
+    marketShareDesc = "Bölge ortalamasının %2 ve üzerinde üzerinde, güçlü satış payı.";
+  }
+
+  let velocityLabel = "Bilinmiyor";
+  let velocityDesc = "Mağaza geneline göre devir sapması hesaplanamadı.";
+  if (storeAverageCover > 0) {
+    const ratio = (node.Cover || 0) / storeAverageCover;
+    if (ratio < 0.6) {
+      velocityLabel = "⚡ Çok Hızlı Devir (Stok Riski)";
+      velocityDesc = "Mağaza ortalamasından çok daha hızlı satıyor, yok satma/ürün eksikliği riski yüksek.";
+    } else if (ratio <= 1.2) {
+      velocityLabel = "⚖️ Dengeli Devir Hızı";
+      velocityDesc = "Mağaza geneliyle uyumlu ve sağlıklı bir devir hızına sahip.";
+    } else if (ratio <= 2.0) {
+      velocityLabel = "🐌 Yavaş Devir";
+      velocityDesc = "Satış hızı mağaza ortalamasının gerisinde kalıyor, ciro artırıcı aksiyonlar düşünülmeli.";
+    } else {
+      velocityLabel = "🚨 Atıl Stok Riski (Hareketsiz)";
+      velocityDesc = "Devir hızı çok yavaş, stok birikmesi ve atıl ürün kalma riski yüksek.";
+    }
+  }
+
+  // Gelecek Stok Ömrü (Future Cover) ve Stok Durumu Analizi (Haftalık)
+  const weeklySales = node.SalesQuantity || 0;
+  const futureCover = weeklySales > 0 ? ((node.OnHandQty || 0) + (node.OnWay || 0)) / weeklySales : 0;
+
+  let stockStatus = "Dengeli";
+  if (weeklySales > 0) {
+    if (futureCover < 5) {
+      stockStatus = "Stok İhtiyacı (Ürün İstenmeli)";
+    } else if (futureCover > 10) {
+      stockStatus = "Stok Yükü (Fazla Stok)";
+    } else {
+      stockStatus = "Dengeli (İdeal Seviye)";
+    }
+  } else {
+    if ((node.OnHandQty || 0) + (node.OnWay || 0) > 0) {
+      stockStatus = "Stok Yükü (Fazla Stok)";
+    } else {
+      stockStatus = "Dengeli";
+    }
+  }
 
   return {
     id: `${node.Department}-${type}-${node.Name}`,
@@ -371,12 +442,22 @@ export function getPreProcessedDeltas(node: RawStoreDataRow, type: string, store
         label: spaceLabel
       },
       market_power_gap: marketGap.toFixed(1),
+      market_share_comment: {
+        label: marketShareLabel,
+        description: marketShareDesc
+      },
       velocity_deviation: velocityDev,
+      velocity_comment: {
+        label: velocityLabel,
+        description: velocityDesc
+      },
       current_cover: node.Cover,
       on_way_qty: node.OnWay,
       sales_lfl_pct: salesLFL,
       stock_qty_lfl_pct: stockQtyLFL,
-      sales_qty_lfl_pct: salesQtyLFL
+      sales_qty_lfl_pct: salesQtyLFL,
+      future_cover: futureCover.toFixed(1),
+      stock_status: stockStatus
     }
   };
 }

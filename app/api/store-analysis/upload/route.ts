@@ -62,7 +62,17 @@ export async function POST(request: NextRequest) {
       
       const metricsPrompt = `Extract the overall store metrics from the top sections of this dashboard PDF (Sales Amount, Sales Amount LY %, Sales Quantity, Sales Quantity LY %, Cover, Conversion, IPT, ATV, FOOTFALL, Unit Price). Map them to this exact schema: { "SalesAmount": number, "SalesAmountLYPct": number, "SalesQuantity": number, "SalesQuantityLYPct": number, "Cover": number, "ConversionPct": number, "IPT": number, "ATV": number, "Footfall": number, "UnitPrice": number }. For example, if you see %51,5, return 51.5. If you see 1.578.696, return 1578696. If missing, return 0. Return ONLY the raw JSON object, without any markdown blocks or explanation.`;
 
-      const rowsPrompt = `Extract the tabular data from this store dashboard PDF into a JSON array of objects. The PDF contains rows representing 'Departments' (e.g. WOMAN, MAN totals), 'Groups' (or Lifestyles) like Casual, Young, 'Classes' like Trousers, Shirts, and 'Buyers' (or Sub-Categories like Woven Top, Knitted). Extract ALL of these rows as separate objects in the array. Do not summarize or truncate the list. Map the values to this exact schema: { "Department": "string", "RowType": "string", "Name": "string", "StoreSalesPct": number, "RegionSalesPct": number, "SalesAmountLFLPct": number, "StockQtyLFLPct": number, "SalesQuantityLFLPct": number, "Cover": number, "OnWay": number, "NetFinalOccupancyPct": number, "SalesAmount": number }. For percentage values, extract them as numbers (e.g., %25.5 -> 25.5). If missing or "Boş", use 0. Return ONLY the raw JSON array, without any markdown blocks or explanation.`;
+      const rowsPrompt = `Extract the tabular data from this store dashboard PDF into a JSON array of objects. The PDF contains rows representing 'Departments' (e.g. WOMAN, MAN totals), 'Groups' (or Lifestyles) like Casual, Young, 'Classes' like Trousers, Shirts, and 'Buyers' (or Sub-Categories like Woven Top, Knitted). Extract ALL of these rows as separate objects in the array. Do not summarize or truncate the list. Map the values to this exact schema: { "Department": "string", "RowType": "string", "Name": "string", "StoreSalesPct": number, "RegionSalesPct": number, "StockCostPct": number, "SalesAmountLFLPct": number, "StockQtyLFLPct": number, "SalesQuantityLFLPct": number, "Cover": number, "OnWay": number, "NetFinalOccupancyPct": number, "SalesAmount": number, "OnHandQty": number, "SalesQuantity": number }. For percentage values, extract them as numbers (e.g., %25.5 -> 25.5). If missing or "Boş", use 0. Return ONLY the raw JSON array, without any markdown blocks or explanation.
+
+CRITICAL COLUMN ALIGNMENT RULE:
+The columns in the PDF table must correspond exactly to their mapped JSON properties:
+- 'Sales Quantity' (pieces sold) must map to 'SalesQuantity'.
+- 'Stock Qty OnHand' must map to 'OnHandQty'.
+- 'Stock Qty LFL %' must map to 'StockQtyLFLPct'.
+- 'Cover' must map to 'Cover'.
+- 'Stock Qty OnWay' must map to 'OnWay'.
+- 'Net Final Occupancy' must map to 'NetFinalOccupancyPct'.
+NEVER shift values to the left to fill missing/blank columns. If a cell is blank or empty in the PDF, use 0. For example, if 'Stock Qty LFL %' is blank in a row, the 'Cover' value (e.g., 8.3) must NOT be placed into 'StockQtyLFLPct'. It must remain in 'Cover', and 'StockQtyLFLPct' must be set to 0.`;
 
       const [metricsResult, rowsResult] = await Promise.all([
         callGeminiNext({
@@ -180,7 +190,7 @@ export async function POST(request: NextRequest) {
 Sana her ürün grubu için şu veri paketi sağlanacaktır:
 - Temel Metrikler: Ciro (SalesAmount), Cover, Eldeki Stok (OnHandQty), Yoldaki Stok (OnWay).
 - Hesaplanan 7 Kritik Sapma/Büyüme Verisi (Deltalar):
-  1. Alan Verimliliği Oranı (Space Score)
+  1. Stok Verimliliği (Stock Score)
   2. Bölgesel Satış Payı Farkı (Market Power Gap)
   3. Stok Devir Hızı Sapması (Velocity Deviation)
   4. Ciro Büyüme Oranı LFL % (sales_lfl_pct)

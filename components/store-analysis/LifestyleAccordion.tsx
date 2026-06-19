@@ -11,6 +11,10 @@ interface LifestyleAccordionProps {
   onToggle?: () => void;
   storeAverageCover?: number;
   hasAIAnalysis?: boolean;
+  trend?: {
+    direction: 'up' | 'down' | 'stable';
+    diff: number;
+  } | null;
 }
 
 export default function LifestyleAccordion({ 
@@ -19,7 +23,8 @@ export default function LifestyleAccordion({
   isOpen: controlledIsOpen, 
   onToggle, 
   storeAverageCover = 0,
-  hasAIAnalysis = false
+  hasAIAnalysis = false,
+  trend
 }: LifestyleAccordionProps) {
   const [internalIsOpen, setInternalIsOpen] = useState(false);
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
@@ -65,14 +70,33 @@ export default function LifestyleAccordion({
       >
         {/* Top row on mobile: Name + Badge + Chevron */}
         <div className="flex items-center justify-between w-full md:w-auto mb-2 md:mb-0">
-          <div className="flex items-center gap-2 md:gap-3">
+          <div className="flex items-center gap-2 md:gap-3 flex-wrap">
             <div className={`shrink-0 w-2.5 h-2.5 md:w-3 md:h-3 rounded-full ${node.insight.status === 'green' ? 'bg-green-500' : node.insight.status === 'red' ? 'bg-red-500' : 'bg-gray-400'}`}></div>
             <span className={`font-semibold truncate max-w-[150px] md:max-w-none ${isClass ? 'text-gray-700 text-sm' : 'text-gray-900'}`}>
               {nodeName}
             </span>
-            {!isOpen && (
-              <span className={`px-2 py-0.5 text-[10px] md:text-xs font-medium rounded-full ${badgeColor} ml-1 md:ml-2 hidden sm:inline-block truncate max-w-[100px] md:max-w-none`}>
-                {node.insight.warning}
+            {trend && (
+              <span className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] font-bold rounded-md shrink-0 border ${
+                trend.direction === 'up' ? 'bg-green-50 text-green-700 border-green-200' :
+                trend.direction === 'down' ? 'bg-red-50 text-red-700 border-red-200' :
+                'bg-gray-50 text-gray-500 border-gray-200'
+              }`} title={`Önceki rapora göre ciro payı değişimi: ${trend.diff > 0 ? '+' : ''}${trend.diff.toFixed(2)}%`}>
+                {trend.direction === 'up' && <span className="text-xs">▲</span>}
+                {trend.direction === 'down' && <span className="text-xs">▼</span>}
+                {trend.direction === 'stable' && <span className="text-xs">●</span>}
+                <span className="font-mono text-[9px]">{trend.diff > 0 ? '+' : ''}{trend.diff.toFixed(1)}%</span>
+              </span>
+            )}
+            <span className={`px-2 py-0.5 text-[10px] md:text-xs font-medium rounded-full ${badgeColor} ml-1 md:ml-2 hidden sm:inline-block truncate max-w-[100px] md:max-w-none`}>
+              {node.insight.warning}
+            </span>
+            {delta.trigger.tag && delta.trigger.tag !== "[NÖTR]" && (
+              <span className={`px-2 py-0.5 text-[10px] md:text-xs font-medium rounded-full ml-1 md:ml-2 hidden sm:inline-block border ${
+                delta.trigger.tag.includes('SAMPIYON') ? 'bg-green-50 text-green-700 border-green-200' :
+                delta.trigger.tag.includes('BASKISI') ? 'bg-yellow-50 text-yellow-800 border-yellow-200' :
+                'bg-red-50 text-red-700 border-red-200'
+              }`}>
+                {delta.trigger.tag.replace('[', '').replace(']', '').replace(/_/g, ' ')}
               </span>
             )}
           </div>
@@ -130,33 +154,86 @@ export default function LifestyleAccordion({
               </svg>
               Matematiksel Göstergeler (Hesaplanan Deltalar)
             </h4>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
               <div className="bg-white p-3 rounded-lg border border-gray-200 shadow-xs">
-                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Alan Verimliliği (Space Score)</span>
+                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Stok Verimliliği</span>
                 <p className="text-base font-extrabold text-gray-900 mt-1">
                   {Number(delta.context.space_opportunity.score) > 0 ? '+' : ''}{delta.context.space_opportunity.score}
                 </p>
                 <span className={`inline-block text-[9px] font-bold px-1.5 py-0.5 rounded-full mt-1.5 ${
-                  delta.context.space_opportunity.label.includes('KAHRAMAN') ? 'bg-green-50 text-green-700 border border-green-200' :
-                  delta.context.space_opportunity.label.includes('ASALAĞI') || delta.context.space_opportunity.label.includes('VERİMSİZ') ? 'bg-red-50 text-red-700 border border-red-200' :
+                  delta.context.space_opportunity.label.includes('YILDIZI') ? 'bg-green-50 text-green-700 border border-green-200' :
+                  delta.context.space_opportunity.label.includes('YÜKÜ') || delta.context.space_opportunity.label.includes('VERİMSİZ') ? 'bg-red-50 text-red-700 border border-red-200' :
                   'bg-gray-50 text-gray-700 border border-gray-200'
                 }`}>
                   {delta.context.space_opportunity.label}
                 </span>
               </div>
 
-              <div className="bg-white p-3 rounded-lg border border-gray-200 shadow-xs">
-                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Bölgesel Pazar Payı Farkı</span>
-                <p className={`text-base font-extrabold mt-1 ${Number(delta.context.market_power_gap) > 0 ? 'text-green-600' : Number(delta.context.market_power_gap) < 0 ? 'text-gray-900' : 'text-gray-900'}`}>
-                  {Number(delta.context.market_power_gap) > 0 ? '+' : ''}{delta.context.market_power_gap}%
-                </p>
-                <span className="text-[9px] text-gray-400 mt-2 block">Bölge ortalaması ile farkı</span>
+              <div className="bg-white p-3 rounded-lg border border-gray-200 shadow-xs flex flex-col justify-between">
+                <div>
+                  <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Bölgesel Satış Payı Farkı</span>
+                  <p className={`text-base font-extrabold mt-1 ${Number(delta.context.market_power_gap) > 0 ? 'text-green-600' : Number(delta.context.market_power_gap) < 0 ? 'text-red-600' : 'text-gray-900'}`}>
+                    {Number(delta.context.market_power_gap) > 0 ? '+' : ''}{delta.context.market_power_gap}%
+                  </p>
+                </div>
+                {delta.context.market_share_comment ? (
+                  <div className="mt-2">
+                    <span className={`inline-block text-[9px] font-bold px-1.5 py-0.5 rounded-full ${
+                      delta.context.market_share_comment.label.includes('Kritik') ? 'bg-red-50 text-red-700 border border-red-200' :
+                      delta.context.market_share_comment.label.includes('Kaybı') ? 'bg-amber-50 text-amber-700 border border-amber-200' :
+                      delta.context.market_share_comment.label.includes('Dengeli') ? 'bg-blue-50 text-blue-700 border border-blue-200' :
+                      'bg-green-50 text-green-700 border border-green-200'
+                    }`}>
+                      {delta.context.market_share_comment.label}
+                    </span>
+                    <span className="text-[9.5px] text-gray-500 mt-1 block leading-tight">
+                      {delta.context.market_share_comment.description}
+                    </span>
+                  </div>
+                ) : (
+                  <span className="text-[9px] text-gray-400 mt-2 block">Bölge ortalaması ile farkı</span>
+                )}
               </div>
 
               <div className="bg-white p-3 rounded-lg border border-gray-200 shadow-xs">
-                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Stok Devir Sapması (Velocity)</span>
-                <p className="text-base font-extrabold text-gray-900 mt-1">{delta.context.velocity_deviation}x</p>
-                <span className="text-[9px] text-gray-400 mt-2 block">Mağaza geneline göre devir oranı</span>
+                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Gelecek Stok Ömrü</span>
+                <p className="text-base font-extrabold text-gray-900 mt-1">
+                  {delta.context.future_cover} Hafta
+                </p>
+                <span className={`inline-block text-[9px] font-bold px-1.5 py-0.5 rounded-full mt-1.5 ${
+                  delta.context.stock_status.includes('İhtiyacı') ? 'bg-red-50 text-red-700 border border-red-200' :
+                  delta.context.stock_status.includes('Yükü') ? 'bg-yellow-50 text-yellow-800 border border-yellow-200' :
+                  'bg-green-50 text-green-700 border border-green-200'
+                }`}>
+                  {delta.context.stock_status}
+                </span>
+              </div>
+
+              <div className="bg-white p-3 rounded-lg border border-gray-200 shadow-xs flex flex-col justify-between">
+                <div>
+                  <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Stok Devir Sapması (Velocity)</span>
+                  <p className="text-base font-extrabold text-gray-900 mt-1">
+                    {delta.context.velocity_deviation === 'Bilinmiyor' ? 'Bilinmiyor' : `${delta.context.velocity_deviation}x`}
+                  </p>
+                </div>
+                {delta.context.velocity_comment ? (
+                  <div className="mt-2">
+                    <span className={`inline-block text-[9px] font-bold px-1.5 py-0.5 rounded-full ${
+                      delta.context.velocity_comment.label.includes('Çok Hızlı') ? 'bg-orange-50 text-orange-700 border border-orange-200' :
+                      delta.context.velocity_comment.label.includes('Dengeli') ? 'bg-green-50 text-green-700 border border-green-200' :
+                      delta.context.velocity_comment.label.includes('Yavaş') ? 'bg-yellow-50 text-yellow-800 border border-yellow-200' :
+                      delta.context.velocity_comment.label.includes('Atıl') ? 'bg-red-50 text-red-700 border border-red-200' :
+                      'bg-gray-50 text-gray-700 border border-gray-200'
+                    }`}>
+                      {delta.context.velocity_comment.label}
+                    </span>
+                    <span className="text-[9.5px] text-gray-500 mt-1 block leading-tight">
+                      {delta.context.velocity_comment.description}
+                    </span>
+                  </div>
+                ) : (
+                  <span className="text-[9px] text-gray-400 mt-2 block">Mağaza geneline göre devir oranı</span>
+                )}
               </div>
             </div>
           </div>
@@ -211,14 +288,7 @@ export default function LifestyleAccordion({
                 Görev Ata
               </button>
             </div>
-          ) : (
-            <div className="p-4 rounded-xl border border-dashed border-gray-200 bg-gray-50/50">
-              <h5 className="font-bold text-xs text-gray-500 uppercase tracking-wider flex items-center gap-1.5">
-                <span>🤖</span> Yapay Zeka Teşhisi Bekleniyor
-              </h5>
-              <p className="text-xs text-gray-400 mt-1">Bu kategori için otomatik yapay zeka teşhisleri üretilmedi. Sayfanın en üstünde yer alan <b>"Yapay Zeka Teşhisi Yap"</b> butonuna basarak analizi başlatabilirsiniz.</p>
-            </div>
-          )}
+          ) : null}
         </div>
       )}
 

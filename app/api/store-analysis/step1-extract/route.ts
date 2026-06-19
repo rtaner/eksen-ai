@@ -63,7 +63,19 @@ export async function POST(request: NextRequest) {
       const prompt = `Extract both the overall store metrics and the tabular data from this store dashboard PDF.
 1. Store Metrics: from the top sections (Sales Amount, Sales Amount LY %, Sales Quantity, Sales Quantity LY %, Cover, Conversion, IPT, ATV, FOOTFALL, Unit Price).
 2. Rows: from the table. The PDF contains rows representing 'Departments', 'Groups' (or Lifestyles) like Casual, 'Classes', and 'Buyers'. Extract ALL of these rows.
-For percentage values, extract them as plain numbers (e.g., %25.5 -> 25.5). If missing or "Boş", use 0.`;
+For percentage values, extract them as plain numbers (e.g., %25.5 -> 25.5). If missing or "Boş", use 0. Make sure to extract 'Stock Cost %' and map it to 'StockCostPct'.
+
+CRITICAL COLUMN ALIGNMENT RULE:
+The columns in the PDF table must correspond exactly to their mapped JSON properties:
+- 'Sales Quantity' (pieces sold) must map to 'SalesQuantity'.
+- 'Stock Qty OnHand' must map to 'OnHandQty'.
+- 'Stock Qty LFL %' must map to 'StockQtyLFLPct'.
+- 'Cover' must map to 'Cover'.
+- 'Stock Qty OnWay' must map to 'OnWay'.
+- 'Net Final Occupancy' must map to 'NetFinalOccupancyPct'.
+CRITICAL RULE FOR BLANK CELLS:
+Some cells or columns in the table may be blank or empty (especially 'Stock Qty LFL %' or 'Stock Qty OnWay'). Because all fields are required in the schema, you MUST output a hyphen ("-"), zero ("0"), or "Boş" for any blank or empty cells.
+NEVER shift values to the left to fill missing/blank columns. For example, if 'Stock Qty LFL %' is blank in a row, the 'Cover' value (e.g., "8.3") must NOT be placed into 'StockQtyLFLPct'. It must remain in 'Cover', and 'StockQtyLFLPct' must be set to "-" or "0" or "Boş".`;
 
       const responseSchema = {
         type: "OBJECT",
@@ -92,17 +104,20 @@ For percentage values, extract them as plain numbers (e.g., %25.5 -> 25.5). If m
                 Department: { type: "STRING" },
                 RowType: { type: "STRING" },
                 Name: { type: "STRING" },
-                StoreSalesPct: { type: "NUMBER" },
-                RegionSalesPct: { type: "NUMBER" },
+                SalesAmount: { type: "NUMBER" },
                 SalesAmountLFLPct: { type: "NUMBER" },
-                StockQtyLFLPct: { type: "NUMBER" },
+                SalesQuantity: { type: "NUMBER" },
                 SalesQuantityLFLPct: { type: "NUMBER" },
+                RegionSalesPct: { type: "NUMBER" },
+                StoreSalesPct: { type: "NUMBER" },
+                StockCostPct: { type: "NUMBER" },
+                OnHandQty: { type: "NUMBER" },
+                StockQtyLFLPct: { type: "NUMBER" },
                 Cover: { type: "NUMBER" },
                 OnWay: { type: "NUMBER" },
-                NetFinalOccupancyPct: { type: "NUMBER" },
-                SalesAmount: { type: "NUMBER" }
+                NetFinalOccupancyPct: { type: "NUMBER" }
               },
-              required: ["Department", "RowType", "Name", "StoreSalesPct", "RegionSalesPct", "SalesAmountLFLPct", "StockQtyLFLPct", "SalesQuantityLFLPct", "Cover", "OnWay", "NetFinalOccupancyPct", "SalesAmount"]
+              required: ["Department", "RowType", "Name", "SalesAmount", "SalesAmountLFLPct", "SalesQuantity", "SalesQuantityLFLPct", "RegionSalesPct", "StoreSalesPct", "StockCostPct", "OnHandQty", "StockQtyLFLPct", "Cover", "OnWay", "NetFinalOccupancyPct"]
             }
           }
         },

@@ -30,6 +30,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'analysisId is required' }, { status: 400 });
     }
 
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) {
+      return NextResponse.json({ error: 'GEMINI_API_KEY is not configured on the server.' }, { status: 500 });
+    }
+
     // 1. Get the current store analysis record
     const { data: analysis, error: fetchError } = await supabase
       .from('store_analyses')
@@ -99,18 +104,13 @@ export async function POST(request: NextRequest) {
       .slice(0, 15);
 
     if (topDeltaPackages.length > 0) {
-      const apiKey = process.env.GEMINI_API_KEY;
-      if (!apiKey) {
-        return NextResponse.json({ error: 'GEMINI_API_KEY is not configured on the server.' }, { status: 500 });
-      }
-
       console.log(`Analyzing ${topDeltaPackages.length} items for analysis ID: ${analysisId}`);
       const masterPrompt = `Sen uzman bir perakende stratejisti ve ticari analiz danışmanısın. Görevin, sana verilen reyon/kategori performans verilerini ve hesaplanmış metrik sapmalarını (deltaları) inceleyerek, bu kategorideki asıl ticari durumu veya problemi kendi perakende mantığınla serbestçe teşhis etmektir.
 
 Sana her ürün grubu için şu veri paketi sağlanacaktır:
 - Temel Metrikler: Ciro (SalesAmount), Cover, Eldeki Stok (OnHandQty), Yoldaki Stok (OnWay).
 - Hesaplanan 7 Kritik Sapma/Büyüme Verisi (Deltalar):
-  1. Alan Verimliliği Oranı (Space Score)
+  1. Stok Verimliliği (Stock Score)
   2. Bölgesel Satış Payı Farkı (Market Power Gap)
   3. Stok Devir Hızı Sapması (Velocity Deviation)
   4. Ciro Büyüme Oranı LFL % (sales_lfl_pct)
@@ -168,6 +168,113 @@ ${JSON.stringify(topDeltaPackages)}
           if (parsedInsights[id]) buyer.deepInsight = parsedInsights[id];
         });
       });
+    }
+
+    // 3.5. Generate Store Executive Report
+    if (apiKey) {
+      try {
+        const analysisDate = new Date(analysis.created_at).toLocaleDateString('tr-TR', { day: '2-digit', month: 'long', year: 'numeric' });
+        const storeMetrics = dashboardData.storeMetrics || {
+          SalesAmount: 0,
+          SalesAmountLYPct: 0,
+          SalesQuantity: 0,
+          SalesQuantityLYPct: 0,
+          Cover: 0,
+          ConversionPct: 0,
+          IPT: 0,
+          ATV: 0,
+          Footfall: 0
+        };
+
+        const deptSummary = dashboardData.departments.map((dept: any) => ({
+          name: dept.name,
+          StoreSalesPct: dept.StoreSalesPct,
+          SalesAmountLFLPct: dept.SalesAmountLFLPct,
+          Cover: dept.Cover,
+          NetFinalOccupancyPct: dept.NetFinalOccupancyPct,
+          anomalies: [
+            ...(dept.lifestyles || []).map((ls: any) => {
+              const delta = getPreProcessedDeltas(ls, 'Lifestyle', dashboardData.storeAverageCover || 0);
+              return delta.trigger.priority < 99 ? { name: ls.name, tag: delta.trigger.tag, desc: delta.trigger.description } : null;
+            }),
+            ...(dept.classes || []).map((cls: any) => {
+              const delta = getPreProcessedDeltas(cls, 'Class', dashboardData.storeAverageCover || 0);
+              return delta.trigger.priority < 99 ? { name: cls.name, tag: delta.trigger.tag, desc: delta.trigger.description } : null;
+            }),
+            ...(dept.buyers || []).map((buyer: any) => {
+              const delta = getPreProcessedDeltas(buyer, 'Buyer', dashboardData.storeAverageCover || 0);
+              return delta.trigger.priority < 99 ? { name: buyer.name, tag: delta.trigger.tag, desc: delta.trigger.description } : null;
+            })
+          ].filter(Boolean)
+        }));
+
+        const execPrompt = `Sen Bozüyük AVM mağazası için çalışan uzman bir perakende stratejistisin.
+Görevin, mağazanın haftalık performans verilerini ve dışsal faktörleri (lokasyon karakteri, takvim olayları, mevsimsellik) harmanlayarak mağaza müdürüne yönelik stratejik bir "Yönetici Teşhis ve Aksiyon Raporu" hazırlamaktır.
+
+LOKASYON BİLGİSİ:
+Bozüyük AVM, Türkiye'nin en kritik transit karayolu geçiş güzergahlarından biri üzerinde yer alır. Şehirler arası seyahat eden tatilciler, aileler ve yolcular için önemli bir duraklama, dinlenme ve alışveriş noktasıdır. Mağazanın başarısı, bu transit yolcu trafiğini yakalamasına ve doğru ürün gruplarını (yolculuk, seyahat, hızlı tüketim, pratik giyim, hediye vb.) öne çıkarmasına doğrudan bağlıdır.
+
+ANALİZ TARİHİ: ${analysisDate} (Bu tarihe dayanarak yaklaşan resmi tatilleri, okulların kapanma dönemini, bayramları veya Babalar Günü gibi özel perakende günlerini otomatik tespit et ve yorumla. Örneğin Haziran ortası ise yaz tatili yolcu trafiğinin başlaması ve Babalar Günü gündemdedir. Tarihsel ve mevsimsel koşulları en gerçekçi şekilde bağdaştır.)
+
+MAĞAZA GENEL METRİKLERİ:
+- Ciro: ${storeMetrics.SalesAmount.toLocaleString('tr-TR')} TL (Geçen yıla göre büyüme: %${storeMetrics.SalesAmountLYPct})
+- Satış Adedi: ${storeMetrics.SalesQuantity.toLocaleString('tr-TR')} adet (Geçen yıla göre büyüme: %${storeMetrics.SalesQuantityLYPct})
+- Mağaza Cover (Stok Devir Süresi): ${storeMetrics.Cover} hafta
+- Mağaza Ortalama Dönüşüm Oranı (Conversion): %${storeMetrics.ConversionPct}
+- Mağaza Ortalama Sepet Adedi (IPT): ${storeMetrics.IPT}
+- Mağaza Ortalama Sepet Tutarı (ATV): ${storeMetrics.ATV} TL
+- Toplam Ziyaretçi Sayısı (Footfall): ${storeMetrics.Footfall}
+
+DEPARTMAN VE REYON BAZLI ÖZET VERİLER VE ANOMALİLER:
+${JSON.stringify(deptSummary, null, 2)}
+
+PERAKENDE ANALİZ KURALLARI:
+1. Sayısal verilerle dışsal etkenleri (Bozüyük yol güzergahı, hava sıcaklığı, tatilci trafiği, özel günler) doğrudan ilişkilendir. Örneğin:
+   - Eğer okullar yeni kapanıyorsa ve tatilci trafiği artacaksa, seyahat, plaj, casual ürün grupları ve çocuk/bebek reyonlarındaki stok durumu ne olmalı?
+   - Babalar Günü yaklaşıyorsa erkek reyonundaki hediyeleşme trafiği, satış payı kayıpları veya stok yükleri nasıl yönetilmeli?
+   - Sıcak havalarda reyonlarda hangi ürünler öne çıkarılmalı?
+2. Mağaza müdürünün sahada hemen uygulayabileceği çok somut, aksiyon odaklı adımlar öner.
+3. Rapor dilini profesyonel, yapıcı, yönlendirici ve teşvik edici tut.
+
+Lütfen çıktıyı SADECE aşağıdaki geçerli JSON formatında üret. JSON dışında hiçbir markdown biçimlendirmesi veya açıklama ekleme:
+{
+  "executive_summary": "Genel mağaza durumu, gidişat ve dış etkenlerin etkisini özetleyen 2-3 cümlelik yönetici özeti.",
+  "diagnoses": [
+    {
+      "title": "Teşhis Başlığı (Örn: Seyahat Sezonu Başlangıcı ve Plaj Grubu Fırsatı)",
+      "description": "Veri ve dış etken ilişkisine dayalı detaylı durum tespiti."
+    }
+  ],
+  "action_plans": [
+    {
+      "area": "Aksiyon Alınacak Reyon/Alan",
+      "actions": [
+        "Somut eylem adımı 1",
+        "Somut eylem adımı 2"
+      ]
+    }
+  ]
+}
+`;
+
+        console.log(`Generating store executive report for analysis ID: ${analysisId}`);
+        const geminiExecutiveResult = await callGeminiNext({
+          apiKey,
+          prompt: execPrompt,
+          temperature: 0.2,
+          model: 'gemini-3.5-flash',
+        });
+
+        if (geminiExecutiveResult.success) {
+          const parsedExecReport = parseGeminiJSON(geminiExecutiveResult.text);
+          dashboardData.executiveReport = parsedExecReport;
+          console.log("Successfully generated and parsed store executive report");
+        } else {
+          console.error("Gemini Executive Report API error:", geminiExecutiveResult.error);
+        }
+      } catch (execErr: any) {
+        console.error("Store executive report generation failed:", execErr);
+      }
     }
 
     // 4. Update the database record

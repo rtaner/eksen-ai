@@ -285,6 +285,18 @@ CRITICAL NUMBER FORMATTING:
 The document uses Turkish formatting (dots for thousands like "465.050", commas for decimals like "%18,5").
 Copy all numerical values and percentages EXACTLY as they are printed in the PDF (e.g., "465.050", "%18,5", "-%0,9", "8,1", "345") as strings. Do NOT attempt to clean or convert them yourself.
 
+CRITICAL COLUMN ALIGNMENT RULE:
+The columns in the PDF table must correspond exactly to their mapped JSON properties.
+- 'Stock Qty OnHand' must map to 'OnHandQty'.
+- 'Stock Qty LFL %' must map to 'StockQtyLFLPct'.
+- 'Cover' must map to 'Cover'.
+- 'Stock Qty OnWay' must map to 'OnWay'.
+- 'Net Final Occupancy' must map to 'NetFinalOccupancyPct'.
+
+CRITICAL RULE FOR BLANK CELLS:
+Some cells or columns in the table may be blank or empty (especially 'Stock Qty LFL %' or 'Stock Qty OnWay'). Because all fields are required in the schema, you MUST output a hyphen ("-"), zero ("0"), or "Boş" for any blank or empty cells.
+NEVER shift values to the left to fill missing/blank columns. For example, if 'Stock Qty LFL %' is blank in a row, the 'Cover' value (e.g., "8,3") must NOT be placed into 'StockQtyLFLPct'. It must remain in 'Cover', and 'StockQtyLFLPct' must be set to "-" or "0" or "Boş".
+
 EXTRACTION RULES & MAPPING:
 1. Department: Identify the main Department printed vertically on the far left margin (e.g., "WOMAN", "MAN", "KIDS&BABY", "HW&UW", "ACC&FTW"). Apply this strictly to ALL rows on this page.
 2. RowType: Tables are grouped by vertical text blocks next to them (e.g., "CLASS", "LIFESTYLE", "BUYER", "SEASON", "DIVF"). Determine which vertical block the table belongs to and use it as the RowType for those specific rows.
@@ -298,10 +310,12 @@ EXTRACTION RULES & MAPPING:
    - "Name": The item group name (e.g., "Traditional", "Trousers", "Knitted").
    - "SalesAmount": Value under the 'Sales Amount' column.
    - "SalesAmountLFLPct": Value under the 'Sales Amount LFL %' column (Ciro Büyüme LFL).
+   - "SalesQuantity": Value under the 'Sales Quantity' column (Field 3 / Satış Adet).
    - "SalesQuantityLFLPct": Value under the 'Sales Quantity LFL %' column (Adet Büyüme LFL).
-   - "StoreSalesPct": Value under the 'Sales Amount %' column (Mağaza satış %).
    - "RegionSalesPct": Value under the 'Region Sales %' column (Bölge satış %).
-   - "StockSalesDiffPct": Value under the 'Stock-Sales Amount %' column. STRICT RULE: Do not confuse this with 'Stock Cost %'.
+   - "StoreSalesPct": Value under the 'Sales Amount %' column (Mağaza satış %).
+   - "StockCostPct": Value under the 'Stock Cost %' column.
+   - "StockSalesDiffPct": Value under the 'Stock-Sales Amount %' column.
    - "OnHandQty": Value under the 'Stock Qty OnHand' column.
    - "StockQtyLFLPct": Value under the 'Stock Qty LFL %' column (Stok Büyüme LFL).
    - "Cover": Value under the 'Cover' column.
@@ -317,9 +331,11 @@ Return the result strictly matching this JSON schema:
       "Name": "string",
       "SalesAmount": "string",
       "SalesAmountLFLPct": "string",
+      "SalesQuantity": "string",
       "SalesQuantityLFLPct": "string",
-      "StoreSalesPct": "string",
       "RegionSalesPct": "string",
+      "StoreSalesPct": "string",
+      "StockCostPct": "string",
       "StockSalesDiffPct": "string",
       "OnHandQty": "string",
       "StockQtyLFLPct": "string",
@@ -344,9 +360,11 @@ Return ONLY valid JSON.`;
                 Name: { type: "STRING" },
                 SalesAmount: { type: "STRING" },
                 SalesAmountLFLPct: { type: "STRING" },
+                SalesQuantity: { type: "STRING" },
                 SalesQuantityLFLPct: { type: "STRING" },
-                StoreSalesPct: { type: "STRING" },
                 RegionSalesPct: { type: "STRING" },
+                StoreSalesPct: { type: "STRING" },
+                StockCostPct: { type: "STRING" },
                 StockSalesDiffPct: { type: "STRING" },
                 OnHandQty: { type: "STRING" },
                 StockQtyLFLPct: { type: "STRING" },
@@ -360,9 +378,11 @@ Return ONLY valid JSON.`;
                 "Name",
                 "SalesAmount",
                 "SalesAmountLFLPct",
+                "SalesQuantity",
                 "SalesQuantityLFLPct",
-                "StoreSalesPct",
                 "RegionSalesPct",
+                "StoreSalesPct",
+                "StockCostPct",
                 "StockSalesDiffPct",
                 "OnHandQty",
                 "StockQtyLFLPct",
@@ -474,10 +494,12 @@ Return ONLY valid JSON.`;
                     Name: rType === 'Department' ? dept : r.Name,
                     SalesAmount: parseTurkishNumber(r.SalesAmount),
                     SalesAmountLFLPct: parseTurkishNumber(r.SalesAmountLFLPct),
+                    SalesQuantity: parseTurkishNumber(r.SalesQuantity),
                     SalesQuantityLFLPct: parseTurkishNumber(r.SalesQuantityLFLPct),
                     StoreSalesPct: parseTurkishNumber(r.StoreSalesPct),
                     RegionSalesPct: parseTurkishNumber(r.RegionSalesPct),
                     SalesAmountPct: parseTurkishNumber(r.StockSalesDiffPct !== undefined ? r.StockSalesDiffPct : r.SalesAmountPct),
+                    StockCostPct: parseTurkishNumber(r.StockCostPct),
                     OnHandQty: parseTurkishNumber(r.OnHandQty),
                     StockQtyLFLPct: parseTurkishNumber(r.StockQtyLFLPct),
                     Cover: parseTurkishNumber(r.Cover),
@@ -530,12 +552,12 @@ For all percentage and numeric values, parse them as valid floats (Turkish uses 
 
 Field 1: Name / Group (e.g. "Traditional", "Young", "Tricot", "Knitted Bottom"). Note: If name has spaces (like "Special Col lection" or "Traditiona l"), combine it.
 Field 2: Sales Amount (e.g. "99.320" or "64.815") -> Map to "SalesAmount".
-Field 3: Sales Quantity (e.g. "168" or "131") -> Ignore / do not output (but count it as Field 3).
+Field 3: Sales Quantity (e.g. "168" or "131") -> Map to "SalesQuantity".
 Field 4: Sales Amount LFL % (e.g. "-%0,08" or "-%33,43" or "%48,75") -> Map to "SalesAmountLFLPct".
 Field 5: Sales Quantity LFL % (e.g. "-%21,1" or "-%45,4" or "%22,1") -> Map to "SalesQuantityLFLPct".
 Field 6: Region Sales % (e.g. "12,2%" or "13,1%" or "22,8%") -> Map to "RegionSalesPct".
 Field 7: Store Sales % (labeled Store Amount % or Stock Amount %, e.g. "%17,1" or "%13,9" or "%24,4") -> Map to "StoreSalesPct".
-Field 8: Stock Cost % (e.g. "%15,5" or "%13,6" or "%18,3") -> IGNORE / do not output (but count it as Field 8).
+Field 8: Stock Cost % (e.g. "%15,5" or "%13,6" or "%18,3") -> Map to "StockCostPct".
 Field 9: Stock - Sales Difference % (labeled Stock - Sales Amount %, e.g. "-%1,6" or "-%0,3" or "-%6,1").
   * CRITICAL FOR WOMAN DEPARTMENT: Extract this column correctly (e.g. "-%0,3" for Traditional, "-%1,5" for Young, "-%0,9" for Casual) and map it to "SalesAmountPct". DO NOT mix it with or map it to the Stock Cost % values of Field 8 (e.g., do not use 13.6, 19.0, or 24.9).
 Field 10: OnHand Stock Qty (e.g. "1.683" or "1.498" or "2.298") -> Map to "OnHandQty".
@@ -563,7 +585,7 @@ CRITICAL JSON STRUCTURE:
 {
   "metrics": { "SalesAmount": 0, "SalesAmountLYPct": 0, "SalesQuantity": 0, "SalesQuantityLYPct": 0, "Cover": 0, "ConversionPct": 0, "IPT": 0, "ATV": 0, "Footfall": 0, "UnitPrice": 0 },
   "rows": [
-    { "Department": "WOMAN/MAN/KIDS & BABY/ACC&FTW/H&W", "RowType": "Department/Lifestyle/Class/Buyer", "Name": "...", "StoreSalesPct": 0, "RegionSalesPct": 0, "SalesAmountPct": 0, "SalesAmountLFLPct": 0, "StockQtyLFLPct": 0, "SalesQuantityLFLPct": 0, "Cover": 0, "OnWay": 0, "NetFinalOccupancyPct": 0, "SalesAmount": 0, "OnHandQty": 0 }
+    { "Department": "WOMAN/MAN/KIDS & BABY/ACC&FTW/H&W", "RowType": "Department/Lifestyle/Class/Buyer", "Name": "...", "StoreSalesPct": 0, "RegionSalesPct": 0, "SalesAmountPct": 0, "StockCostPct": 0, "SalesAmountLFLPct": 0, "StockQtyLFLPct": 0, "SalesQuantityLFLPct": 0, "Cover": 0, "OnWay": 0, "NetFinalOccupancyPct": 0, "SalesAmount": 0, "OnHandQty": 0, "SalesQuantity": 0 }
   ]
 }
 - Do NOT skip any rows on this page unless they match the exclusion rules. Extract everything!

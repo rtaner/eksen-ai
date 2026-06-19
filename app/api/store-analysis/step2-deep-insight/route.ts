@@ -68,7 +68,7 @@ export async function POST(request: NextRequest) {
 Sana her ürün grubu için şu veri paketi sağlanacaktır:
 - Temel Metrikler: Ciro (SalesAmount), Cover, Eldeki Stok (OnHandQty), Yoldaki Stok (OnWay).
 - Hesaplanan 7 Kritik Sapma/Büyüme Verisi (Deltalar):
-  1. Alan Verimliliği Oranı (Space Score)
+  1. Stok Verimliliği (Stock Score)
   2. Bölgesel Satış Payı Farkı (Market Power Gap)
   3. Stok Devir Hızı Sapması (Velocity Deviation)
   4. Ciro Büyüme Oranı LFL % (sales_lfl_pct)
