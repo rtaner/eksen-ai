@@ -17,8 +17,8 @@ export default function OneSignalProvider({ children }: { children: React.ReactN
       console.log(`OneSignal: Initializing in ${process.env.NODE_ENV} mode...`);
 
       try {
-        // Check if OneSignal is already initialized
-        if (typeof window !== 'undefined' && (window as any).OneSignalDeferred) {
+        // Check if OneSignal is already initialized to avoid duplicate setups
+        if (typeof window !== 'undefined' && (window as any).OneSignal?.isInitialized?.()) {
           console.log('OneSignal: Already initialized, skipping');
           return;
         }
