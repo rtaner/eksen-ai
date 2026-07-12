@@ -111,7 +111,47 @@ serve(async (req) => {
       throw new Error('Notification not found');
     }
 
-    // Kullanıcının push subscription'larını al
+    // OneSignal Push Bildirimi Gönder (Profilde onesignal_player_id varsa)
+    const { data: profile, error: profileError } = await supabaseAdmin
+      .from('profiles')
+      .select('onesignal_player_id')
+      .eq('id', notification.user_id)
+      .single();
+
+    const oneSignalAppId = Deno.env.get('ONESIGNAL_APP_ID') || Deno.env.get('NEXT_PUBLIC_ONESIGNAL_APP_ID');
+    const oneSignalApiKey = Deno.env.get('ONESIGNAL_REST_API_KEY');
+
+    if (profile?.onesignal_player_id && oneSignalAppId && oneSignalApiKey) {
+      try {
+        const oneSignalPayload = {
+          app_id: oneSignalAppId,
+          include_player_ids: [profile.onesignal_player_id],
+          headings: { en: notification.title },
+          contents: { en: notification.message },
+          url: notification.link || undefined,
+        };
+
+        const osResponse = await fetch('https://onesignal.com/api/v1/notifications', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Basic ${oneSignalApiKey}`,
+          },
+          body: JSON.stringify(oneSignalPayload),
+        });
+
+        if (osResponse.ok) {
+          console.log('OneSignal push notification sent successfully');
+        } else {
+          const osErrorResult = await osResponse.json();
+          console.error('OneSignal push notification error:', osErrorResult);
+        }
+      } catch (err) {
+        console.error('Error sending OneSignal push:', err);
+      }
+    }
+
+    // Kullanıcının push subscription'larını al (Geleneksel Web Push için)
     const { data: subscriptions, error: subError } = await supabaseAdmin
       .from('push_subscriptions')
       .select('*')
