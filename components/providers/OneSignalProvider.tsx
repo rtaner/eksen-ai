@@ -7,17 +7,14 @@ import { createClient } from '@/lib/supabase/client';
 export default function OneSignalProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const initOneSignal = async () => {
-      // Skip OneSignal in development
-      if (process.env.NODE_ENV === 'development') {
-        console.log('OneSignal: Skipped in development mode');
+      // OneSignal App ID kontrolü
+      if (!process.env.NEXT_PUBLIC_ONESIGNAL_APP_ID) {
+        console.log('OneSignal: App ID bulunamadı, push bildirimleri devre dışı');
         return;
       }
 
-      // OneSignal App ID kontrolü
-      if (!process.env.NEXT_PUBLIC_ONESIGNAL_APP_ID) {
-        console.log('OneSignal: App ID bulunamadı');
-        return;
-      }
+      const isDev = process.env.NODE_ENV === 'development';
+      console.log(`OneSignal: Initializing in ${process.env.NODE_ENV} mode...`);
 
       try {
         // Check if OneSignal is already initialized
@@ -28,7 +25,7 @@ export default function OneSignalProvider({ children }: { children: React.ReactN
 
         await OneSignal.init({
           appId: process.env.NEXT_PUBLIC_ONESIGNAL_APP_ID,
-          allowLocalhostAsSecureOrigin: false,
+          allowLocalhostAsSecureOrigin: isDev,
         });
 
         console.log('OneSignal initialized successfully');
