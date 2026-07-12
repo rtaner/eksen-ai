@@ -27,7 +27,7 @@ const nextConfig = {
               "default-src 'self'",
               "script-src 'self' 'unsafe-eval' 'unsafe-inline' https://cdn.onesignal.com",
               "script-src-elem 'self' 'unsafe-inline' https://cdn.onesignal.com https://api.onesignal.com",
-              "style-src 'self' 'unsafe-inline'",
+              "style-src 'self' 'unsafe-inline' https://onesignal.com",
               "img-src 'self' data: https:",
               "font-src 'self' data:",
               "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.gemini.google.com https://onesignal.com https://*.onesignal.com",
