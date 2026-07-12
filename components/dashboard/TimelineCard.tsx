@@ -6,12 +6,14 @@ import { timeAgo } from '@/lib/utils/date';
 
 interface Activity {
   id: string;
-  type: 'note' | 'task' | 'analysis';
+  type: 'note' | 'task' | 'analysis' | 'checklist';
   personnelId: string;
   personnelName: string;
   date: string;
   metadata?: {
     analysisType?: string;
+    checklistTitle?: string;
+    score?: number;
   };
 }
 
@@ -29,6 +31,8 @@ function getActivityIcon(type: string): string {
       return '✅';
     case 'analysis':
       return '🤖';
+    case 'checklist':
+      return '📋';
     default:
       return '📌';
   }
@@ -50,6 +54,12 @@ function getActivityText(activity: Activity): string {
         ? analysisTypeMap[activity.metadata.analysisType] || activity.metadata.analysisType
         : '';
       return `${activity.personnelName} için ${analysisType} analizi oluşturuldu`;
+    case 'checklist':
+      const title = activity.metadata?.checklistTitle || 'Checklist';
+      const scoreText = activity.metadata?.score !== undefined 
+        ? ` (${activity.metadata.score.toFixed(2)}/5.00 Puan)` 
+        : '';
+      return `${activity.personnelName}'na ${title} atandı${scoreText}`;
     default:
       return 'Aktivite';
   }

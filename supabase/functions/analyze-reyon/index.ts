@@ -47,6 +47,7 @@ serve(async (req) => {
         completed_items,
         total_items,
         closing_note,
+        item_comments,
         completed_at,
         completed_by,
         profiles:completed_by (
@@ -172,7 +173,18 @@ serve(async (req) => {
       const pName = resultToPersonnelMap.get(res.id) || 'Atanmamış';
       const evaluator = res.profiles ? `${res.profiles.name} ${res.profiles.surname}` : 'Sistem';
       const completedList = (res.completed_items || []);
-      const uncompletedList = items.filter((it: any) => !completedList.includes(it.id)).map((it: any) => `${it.order}. ${it.text}`);
+      const itemComments = res.item_comments || {};
+      
+      const uncompletedList = items
+        .filter((it: any) => !completedList.includes(it.id))
+        .map((it: any) => {
+          const comment = itemComments[it.id] ? ` (Yorum: "${itemComments[it.id]}")` : '';
+          return `${it.order}. ${it.text}${comment}`;
+        });
+        
+      const completedWithComments = items
+        .filter((it: any) => completedList.includes(it.id) && itemComments[it.id])
+        .map((it: any) => `${it.order}. ${it.text} (Yorum: "${itemComments[it.id]}")`);
       
       return `Değerlendirme #${idx + 1}
 Tarih: ${new Date(res.completed_at).toLocaleDateString('tr-TR')}
@@ -181,7 +193,7 @@ Değerlendiren Yönetici: ${evaluator}
 Genel Skor: ${res.score}/5.00
 Yapılmayan Maddeler:
 ${uncompletedList.length > 0 ? uncompletedList.join('\n') : 'Hepsi yapıldı.'}
-Yönetici Kapanış Notu: ${res.closing_note || 'Yok'}`;
+${completedWithComments.length > 0 ? `Yapılan Maddelerdeki Önemli Notlar:\n${completedWithComments.join('\n')}\n` : ''}Yönetici Kapanış Notu: ${res.closing_note || 'Yok'}`;
     }).join('\n\n');
 
     const prompt = `Sen kıdemli bir mağazacılık ve perakende danışmanısın. Bir departmanın (reyonun) belirli bir tarihteki checklist sonuçlarını ve maddelerini analiz edeceksin.

@@ -92,6 +92,8 @@ export default function NotificationBell() {
         return '💭';
       case 'note_reminder_personnel':
         return '👤';
+      case 'checklist_assigned':
+        return '📋';
       default:
         return '🔔';
     }

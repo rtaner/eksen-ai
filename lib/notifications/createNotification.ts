@@ -7,7 +7,8 @@ export type NotificationType =
   | 'note_added' 
   | 'analysis_completed'
   | 'note_reminder_daily'
-  | 'note_reminder_personnel';
+  | 'note_reminder_personnel'
+  | 'checklist_assigned';
 
 interface CreateNotificationParams {
   userId: string;

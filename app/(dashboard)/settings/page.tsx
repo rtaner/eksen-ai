@@ -151,6 +151,22 @@ export default async function SettingsPage() {
     .order('created_at', { ascending: false })
     .limit(10);
 
+  const { data: recentChecklists } = await supabaseAdmin
+    .from('checklist_assignments')
+    .select(`
+      id,
+      assigned_at,
+      personnel_id,
+      checklist_result:checklist_result_id (
+        id,
+        score,
+        checklist_snapshot
+      )
+    `)
+    .in('personnel_id', personnelIds.length > 0 ? personnelIds : ['00000000-0000-0000-0000-000000000000'])
+    .order('assigned_at', { ascending: false })
+    .limit(10);
+
   // Merge and sort activities
   const activities = [
     ...(recentNotes || []).map((n: any) => ({
@@ -175,6 +191,17 @@ export default async function SettingsPage() {
       date: a.created_at,
       metadata: {
         analysisType: a.analysis_type,
+      },
+    })),
+    ...(recentChecklists || []).map((c: any) => ({
+      id: c.id,
+      type: 'checklist' as const,
+      personnelId: c.personnel_id || '',
+      personnelName: personnelMap.get(c.personnel_id)?.name || 'Bilinmeyen',
+      date: c.assigned_at,
+      metadata: {
+        checklistTitle: c.checklist_result?.checklist_snapshot?.title || 'Checklist',
+        score: c.checklist_result?.score,
       },
     })),
   ]

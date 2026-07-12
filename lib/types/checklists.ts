@@ -28,6 +28,7 @@ export interface ChecklistResult {
   total_items: number;
   score: number; // 0.00 to 5.00
   closing_note: string | null; // Optional comment when completing checklist
+  item_comments?: Record<string, string> | null; // Optional comments for individual items
   completed_at: string;
   created_at: string;
 }
@@ -66,4 +67,37 @@ export interface ChecklistExecutionData {
 export interface ChecklistAssignmentData {
   checklist_result_id: string;
   personnel_ids: string[];
+}
+
+export interface ChecklistAnalysis {
+  id: string;
+  checklist_id: string;
+  organization_id: string;
+  created_by: string;
+  date_range_start: string;
+  date_range_end: string;
+  stats: {
+    totalCount: number;
+    averageScore: number;
+    itemStats: Array<{
+      id: string;
+      text: string;
+      order: number;
+      failCount: number;
+      failRate: number;
+      successRate: number;
+    }>;
+    personnelStats: Array<{
+      name: string;
+      averageScore: number;
+      runsCount: number;
+      completionRate: number;
+    }>;
+  };
+  analysis: string;
+  created_at: string;
+  profiles?: {
+    name: string;
+    surname: string;
+  } | null;
 }

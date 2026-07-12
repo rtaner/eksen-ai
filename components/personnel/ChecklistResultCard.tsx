@@ -105,46 +105,58 @@ export default function ChecklistResultCard({ result }: ChecklistResultCardProps
                 .sort((a, b) => a.order - b.order)
                 .map((item) => {
                   const isCompleted = result.completed_items.includes(item.id);
+                  const comment = result.item_comments?.[item.id];
                   return (
                     <div
                       key={item.id}
-                      className={`flex items-start gap-2 text-sm p-2 rounded ${
+                      className={`flex flex-col gap-1 text-sm p-2.5 rounded ${
                         isCompleted ? 'bg-green-50' : 'bg-gray-50'
                       }`}
                     >
-                      <span className="text-gray-500">{item.order}.</span>
-                      {isCompleted ? (
-                        <svg
-                          className="w-5 h-5 text-green-600 flex-shrink-0"
-                          fill="none"
-                          viewBox="0 0 24 24"
-                          stroke="currentColor"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M5 13l4 4L19 7"
-                          />
-                        </svg>
-                      ) : (
-                        <svg
-                          className="w-5 h-5 text-gray-400 flex-shrink-0"
-                          fill="none"
-                          viewBox="0 0 24 24"
-                          stroke="currentColor"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M6 18L18 6M6 6l12 12"
-                          />
-                        </svg>
+                      <div className="flex items-start gap-2">
+                        <span className="text-gray-500">{item.order}.</span>
+                        {isCompleted ? (
+                          <svg
+                            className="w-5 h-5 text-green-600 flex-shrink-0"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            stroke="currentColor"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M5 13l4 4L19 7"
+                            />
+                          </svg>
+                        ) : (
+                          <svg
+                            className="w-5 h-5 text-gray-400 flex-shrink-0"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            stroke="currentColor"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M6 18L18 6M6 6l12 12"
+                            />
+                          </svg>
+                        )}
+                        <span className={isCompleted ? 'text-gray-900' : 'text-gray-500'}>
+                          {item.text}
+                        </span>
+                      </div>
+                      
+                      {comment && (
+                        <div className="ml-7 mt-1.5 p-2 bg-white border border-gray-150 rounded-lg text-xs text-gray-600 shadow-sm flex items-start gap-1.5">
+                          <span>💬</span>
+                          <div>
+                            <span className="font-semibold text-gray-800">Yorum:</span> {comment}
+                          </div>
+                        </div>
                       )}
-                      <span className={isCompleted ? 'text-gray-900' : 'text-gray-500'}>
-                        {item.text}
-                      </span>
                     </div>
                   );
                 })}

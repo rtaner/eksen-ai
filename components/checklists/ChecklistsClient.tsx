@@ -1,7 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useChecklists } from '@/lib/hooks/useChecklists';
+import { useAuth } from '@/lib/contexts/AuthContext';
 import Card from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
 import Modal from '@/components/ui/Modal';
@@ -12,6 +13,7 @@ import { createClient } from '@/lib/supabase/client';
 
 export default function ChecklistsClient() {
   const { checklists, isLoading } = useChecklists();
+  const { user, profile } = useAuth();
   const [selectedChecklist, setSelectedChecklist] = useState<Checklist | null>(null);
   const [isExecutionModalOpen, setIsExecutionModalOpen] = useState(false);
 
@@ -35,6 +37,49 @@ export default function ChecklistsClient() {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisError, setAnalysisError] = useState<string | null>(null);
   const [analysisResult, setAnalysisResult] = useState<any | null>(null);
+
+  const [pastAnalyses, setPastAnalyses] = useState<any[]>([]);
+  const [isLoadingPast, setIsLoadingPast] = useState(false);
+
+  useEffect(() => {
+    if (selectedAnalysisChecklistId) {
+      fetchPastAnalyses(selectedAnalysisChecklistId);
+    } else {
+      setPastAnalyses([]);
+    }
+  }, [selectedAnalysisChecklistId]);
+
+  const fetchPastAnalyses = async (checklistId: string) => {
+    setIsLoadingPast(true);
+    try {
+      const supabase = createClient();
+      const { data, error } = await supabase
+        .from('checklist_analyses')
+        .select(`
+          id,
+          checklist_id,
+          date_range_start,
+          date_range_end,
+          stats,
+          analysis,
+          created_at,
+          created_by,
+          profiles:created_by (
+            name,
+            surname
+          )
+        `)
+        .eq('checklist_id', checklistId)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setPastAnalyses(data || []);
+    } catch (err) {
+      console.error('Error fetching past analyses:', err);
+    } finally {
+      setIsLoadingPast(false);
+    }
+  };
 
   const handleStart = (checklist: Checklist) => {
     setSelectedChecklist(checklist);
@@ -73,6 +118,27 @@ export default function ChecklistsClient() {
       }
 
       setAnalysisResult(data);
+
+      // Save analysis to history database table
+      if (data && data.success && profile?.organization_id && user?.id) {
+        const { error: saveError } = await supabase
+          .from('checklist_analyses')
+          .insert({
+            checklist_id: selectedAnalysisChecklistId,
+            organization_id: profile.organization_id,
+            created_by: user.id,
+            date_range_start: dateRangeStart,
+            date_range_end: dateRangeEnd,
+            stats: data.stats,
+            analysis: data.analysis,
+          });
+
+        if (saveError) {
+          console.error('Error saving checklist analysis to history:', saveError);
+        } else {
+          fetchPastAnalyses(selectedAnalysisChecklistId);
+        }
+      }
     } catch (err: any) {
       console.error(err);
       setAnalysisError(err.message || 'Analiz sırasında beklenmeyen bir hata oluştu');
@@ -302,6 +368,63 @@ export default function ChecklistsClient() {
             </Card>
           )}
 
+          {/* Past Analyses List */}
+          {!analysisResult && !isAnalyzing && selectedAnalysisChecklistId && (
+            <Card className="print:hidden">
+              <div className="p-6 space-y-4">
+                <h3 className="text-lg font-bold text-gray-800 border-b pb-2">
+                  📜 Geçmiş Analiz Raporları
+                </h3>
+                
+                {isLoadingPast ? (
+                  <div className="text-center py-4">
+                    <p className="text-gray-500 text-sm">Yükleniyor...</p>
+                  </div>
+                ) : pastAnalyses.length === 0 ? (
+                  <p className="text-gray-500 text-sm py-2">
+                    Bu reyon için henüz geçmiş analiz kaydı bulunmuyor. Yukarıdaki formu doldurarak ilk analizi başlatabilirsiniz.
+                  </p>
+                ) : (
+                  <div className="divide-y divide-gray-100 max-h-80 overflow-y-auto">
+                    {pastAnalyses.map((item) => {
+                      const creator = item.profiles ? `${item.profiles.name} ${item.profiles.surname}` : 'Bilinmeyen';
+                      return (
+                        <div key={item.id} className="py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 first:pt-0 last:pb-0">
+                          <div>
+                            <div className="font-semibold text-gray-900 text-sm">
+                              Dönem: {new Date(item.date_range_start).toLocaleDateString('tr-TR')} - {new Date(item.date_range_end).toLocaleDateString('tr-TR')}
+                            </div>
+                            <div className="text-xs text-gray-500 mt-0.5">
+                              Oluşturan: {creator} | Oluşturulma: {new Date(item.created_at).toLocaleString('tr-TR')}
+                            </div>
+                          </div>
+                          
+                          <div className="flex items-center gap-3">
+                            <span className="text-sm font-bold text-blue-600 bg-blue-50 px-2 py-1 rounded">
+                              Puan: {item.stats?.averageScore?.toFixed(2) || '0.00'}
+                            </span>
+                            <Button
+                              variant="secondary"
+                              size="sm"
+                              onClick={() => setAnalysisResult({
+                                stats: item.stats,
+                                analysis: item.analysis,
+                                dateRangeStart: item.date_range_start,
+                                dateRangeEnd: item.date_range_end,
+                              })}
+                            >
+                              Raporu Oku
+                            </Button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </Card>
+          )}
+
           {/* Loading State */}
           {isAnalyzing && (
             <Card className="print:hidden">
@@ -343,7 +466,7 @@ export default function ChecklistsClient() {
                       📊 {selectedChecklistTitle} Performans & AI Analiz Raporu
                     </h2>
                     <p className="text-sm text-blue-800 font-medium">
-                      📅 Dönem: {new Date(dateRangeStart).toLocaleDateString('tr-TR')} - {new Date(dateRangeEnd).toLocaleDateString('tr-TR')} &nbsp;|&nbsp; 📝 Toplam Denetim: {analysisResult.stats?.totalCount}
+                      📅 Dönem: {new Date(analysisResult?.dateRangeStart || dateRangeStart).toLocaleDateString('tr-TR')} - {new Date(analysisResult?.dateRangeEnd || dateRangeEnd).toLocaleDateString('tr-TR')} &nbsp;|&nbsp; 📝 Toplam Denetim: {analysisResult.stats?.totalCount}
                     </p>
                   </div>
                 </Card>

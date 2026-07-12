@@ -7,6 +7,8 @@ import type { Checklist, ChecklistResult } from '@/lib/types';
 
 interface UseChecklistExecutionReturn {
   completedItems: string[];
+  itemComments: Record<string, string>;
+  setItemComment: (itemId: string, comment: string) => void;
   score: number;
   progress: number;
   isSubmitting: boolean;
@@ -21,11 +23,20 @@ export function useChecklistExecution(
   checklist: Checklist | null
 ): UseChecklistExecutionReturn {
   const [completedItems, setCompletedItems] = useState<string[]>([]);
+  const [itemComments, setItemComments] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   
   const { user, profile } = useAuth();
   const supabase = createClient();
+
+  // Set item comment
+  const setItemComment = (itemId: string, comment: string) => {
+    setItemComments((prev) => ({
+      ...prev,
+      [itemId]: comment,
+    }));
+  };
 
   // Calculate score in real-time
   const score = useMemo(() => {
@@ -75,6 +86,7 @@ export function useChecklistExecution(
         total_items: checklist.items.length,
         score: parseFloat(score.toFixed(2)),
         closing_note: closingNote?.trim() || null,
+        item_comments: itemComments,
       };
 
       const { data: result, error: submitError } = await supabase
@@ -101,7 +113,7 @@ export function useChecklistExecution(
     resultId: string,
     personnelIds: string[]
   ): Promise<boolean> => {
-    if (!user || personnelIds.length === 0) {
+    if (!user || !profile || personnelIds.length === 0) {
       setError('Missing required data');
       return false;
     }
@@ -121,6 +133,64 @@ export function useChecklistExecution(
 
       if (assignError) throw assignError;
 
+      // Get personnel metadata to find their user_id for notifications
+      const { data: personnelData } = await supabase
+        .from('personnel')
+        .select('id, name, metadata')
+        .in('id', personnelIds);
+
+      // Fetch owners of the organization to notify them
+      const { data: owners } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('organization_id', profile.organization_id)
+        .eq('role', 'owner');
+
+      // Create notifications for linked users and owners
+      if (personnelData && checklist && profile?.organization_id) {
+        const notifications = personnelData
+          .filter((p: any) => p.metadata && p.metadata.user_id)
+          .map((p: any) => ({
+            user_id: p.metadata.user_id,
+            organization_id: profile.organization_id,
+            type: 'checklist_assigned',
+            title: 'Yeni Checklist Atandı',
+            message: `Size "${checklist.title}" checklist'i atandı.`,
+            link: `/personnel/${p.id}?tab=checklists`,
+          }));
+
+        // Add notifications for the organization owners
+        if (owners && owners.length > 0) {
+          const managerName = profile ? `${profile.name} ${profile.surname}` : 'Bir yönetici';
+          
+          owners.forEach((owner) => {
+            // Don't notify the owner if they are the one who did the action
+            if (owner.id === user.id) return;
+
+            personnelData.forEach((p: any) => {
+              notifications.push({
+                user_id: owner.id,
+                organization_id: profile.organization_id,
+                type: 'checklist_assigned',
+                title: 'Checklist Değerlendirmesi Tamamlandı',
+                message: `${managerName}, ${p.name} için "${checklist.title}" değerlendirmesini tamamladı.`,
+                link: `/personnel/${p.id}?tab=checklists`,
+              });
+            });
+          });
+        }
+
+        if (notifications.length > 0) {
+          const { error: notifyError } = await supabase
+            .from('notifications')
+            .insert(notifications);
+            
+          if (notifyError) {
+            console.error('Error creating checklist notifications:', notifyError);
+          }
+        }
+      }
+
       return true;
     } catch (err) {
       console.error('Error assigning to personnel:', err);
@@ -132,6 +202,7 @@ export function useChecklistExecution(
   // Reset state
   const reset = () => {
     setCompletedItems([]);
+    setItemComments({});
     setError(null);
   };
 
@@ -142,6 +213,8 @@ export function useChecklistExecution(
 
   return {
     completedItems,
+    itemComments,
+    setItemComment,
     score,
     progress,
     isSubmitting,

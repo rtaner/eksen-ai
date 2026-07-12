@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useChecklists } from '@/lib/hooks/useChecklists';
 import { useToast } from '@/lib/contexts/ToastContext';
 import Button from '@/components/ui/Button';
@@ -29,6 +29,7 @@ export default function ChecklistForm({
   const [description, setDescription] = useState('');
   const [items, setItems] = useState<ChecklistItem[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const inputRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
   // Load editing data
   useEffect(() => {
@@ -66,7 +67,69 @@ export default function ChecklistForm({
   };
 
   const updateItemText = (id: string, text: string) => {
-    setItems(items.map((item) => (item.id === id ? { ...item, text } : item)));
+    const updated = items.map((item) => (item.id === id ? { ...item, text } : item));
+    const index = items.findIndex((item) => item.id === id);
+    
+    // If it's the last item and text is not empty, automatically append a new one
+    if (index === items.length - 1 && text.trim() !== '') {
+      const newItemId = generateId();
+      const newItem: ChecklistItem = {
+        id: newItemId,
+        text: '',
+        order: items.length + 1,
+      };
+      setItems([...updated, newItem]);
+    } else {
+      setItems(updated);
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>, id: string, index: number) => {
+    if (e.key === 'Enter') {
+      e.preventDefault(); // Prevent form submission
+      
+      const newItemId = generateId();
+      const newItem: ChecklistItem = {
+        id: newItemId,
+        text: '',
+        order: index + 2,
+      };
+      
+      const newItems = [...items];
+      newItems.splice(index + 1, 0, newItem);
+      
+      // Reorder
+      const reordered = newItems.map((item, idx) => ({
+        ...item,
+        order: idx + 1,
+      }));
+      
+      setItems(reordered);
+      
+      setTimeout(() => {
+        inputRefs.current[newItemId]?.focus();
+      }, 0);
+    } else if (e.key === 'Backspace' && items[index].text === '') {
+      e.preventDefault();
+      
+      if (items.length > 1) {
+        const filtered = items.filter((item) => item.id !== id);
+        const reordered = filtered.map((item, idx) => ({
+          ...item,
+          order: idx + 1,
+        }));
+        setItems(reordered);
+        
+        // Focus the previous item
+        const prevIndex = index - 1;
+        if (prevIndex >= 0 && items[prevIndex]) {
+          const prevId = items[prevIndex].id;
+          setTimeout(() => {
+            inputRefs.current[prevId]?.focus();
+          }, 0);
+        }
+      }
+    }
   };
 
   const moveItem = (index: number, direction: 'up' | 'down') => {
@@ -222,9 +285,13 @@ export default function ChecklistForm({
 
               {/* Text input */}
               <input
+                ref={(el) => {
+                  inputRefs.current[item.id] = el;
+                }}
                 type="text"
                 value={item.text}
                 onChange={(e) => updateItemText(item.id, e.target.value)}
+                onKeyDown={(e) => handleKeyDown(e, item.id, index)}
                 className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 placeholder="Madde metni..."
                 maxLength={500}
