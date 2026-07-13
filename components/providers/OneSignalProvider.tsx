@@ -33,6 +33,19 @@ export default function OneSignalProvider({ children }: { children: React.ReactN
 
         console.log('OneSignal initialized successfully');
 
+        // If browser permission is already granted, ensure OneSignal is opted-in
+        if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
+          const isOptedIn = OneSignal.User.PushSubscription.optedIn;
+          if (!isOptedIn) {
+            console.log('OneSignal: Permission is granted but opted-out. Opting-in automatically...');
+            try {
+              await OneSignal.User.PushSubscription.optIn();
+            } catch (optError) {
+              console.error('Error during auto opt-in:', optError);
+            }
+          }
+        }
+
         // Listen for subscription changes
         OneSignal.User.PushSubscription.addEventListener('change', async (event) => {
           console.log('OneSignal subscription changed:', event);
