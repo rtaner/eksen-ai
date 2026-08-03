@@ -112,22 +112,40 @@ export default function SocialFeedStream({ personnelList, refreshTrigger, onRefr
 
   const handleDeleteNote = async (note: Note) => {
     if (!confirm('Bu notu silmek istediğinizden emin misiniz?')) return;
-    await supabase.from('notes').delete().eq('id', note.id);
-    loadFeedData();
+    setNotes((prev) => prev.filter((n) => n.id !== note.id));
+    const { error } = await supabase.from('notes').delete().eq('id', note.id);
+    if (error) {
+      alert(`Not silinirken hata oluştu: ${error.message}`);
+      loadFeedData();
+    } else {
+      onRefresh?.();
+    }
   };
 
   const handleDeleteTask = async (task: Task) => {
     if (!confirm('Bu görevi silmek istediğinizden emin misiniz?')) return;
-    await supabase.from('tasks').delete().eq('id', task.id);
-    loadFeedData();
+    setTasks((prev) => prev.filter((t) => t.id !== task.id));
+    const { error } = await supabase.from('tasks').delete().eq('id', task.id);
+    if (error) {
+      alert(`Görev silinirken hata oluştu: ${error.message}`);
+      loadFeedData();
+    } else {
+      onRefresh?.();
+    }
   };
 
   const handleCloseTask = async (task: Task) => {
-    await supabase
+    setTasks((prev) => prev.filter((t) => t.id !== task.id));
+    const { error } = await supabase
       .from('tasks')
       .update({ status: 'closed', completed_at: new Date().toISOString() })
       .eq('id', task.id);
-    loadFeedData();
+    if (error) {
+      alert(`Görev tamamlanırken hata oluştu: ${error.message}`);
+      loadFeedData();
+    } else {
+      onRefresh?.();
+    }
   };
 
   // Combine and sort chronologically
