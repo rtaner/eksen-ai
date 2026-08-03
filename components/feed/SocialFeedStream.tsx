@@ -8,6 +8,7 @@ import TaskItem from '@/components/tasks/TaskItem';
 import Modal from '@/components/ui/Modal';
 import NoteForm from '@/components/notes/NoteForm';
 import TaskForm from '@/components/tasks/TaskForm';
+import TaskCloseModal from '@/components/tasks/TaskCloseModal';
 
 type FilterCategory = 'all' | 'store' | 'group' | 'personnel' | 'tasks' | 'notes';
 
@@ -29,9 +30,10 @@ export default function SocialFeedStream({ personnelList, refreshTrigger, onRefr
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [userRole, setUserRole] = useState<Role>('personnel');
 
-  // Edit Modals
+  // Modals
   const [editingNote, setEditingNote] = useState<Note | null>(null);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
+  const [closingTask, setClosingTask] = useState<Task | null>(null);
 
   const loadFeedData = async () => {
     setIsLoading(true);
@@ -134,18 +136,8 @@ export default function SocialFeedStream({ personnelList, refreshTrigger, onRefr
     }
   };
 
-  const handleCloseTask = async (task: Task) => {
-    setTasks((prev) => prev.filter((t) => t.id !== task.id));
-    const { error } = await supabase
-      .from('tasks')
-      .update({ status: 'closed', completed_at: new Date().toISOString() })
-      .eq('id', task.id);
-    if (error) {
-      alert(`Görev tamamlanırken hata oluştu: ${error.message}`);
-      loadFeedData();
-    } else {
-      onRefresh?.();
-    }
+  const handleOpenCloseModal = (task: Task) => {
+    setClosingTask(task);
   };
 
   // Combine and sort chronologically
@@ -245,7 +237,7 @@ export default function SocialFeedStream({ personnelList, refreshTrigger, onRefr
                     groupName={gName}
                     canEdit={canEditTask}
                     canDelete={canDeleteTask}
-                    onClose={handleCloseTask}
+                    onClose={handleOpenCloseModal}
                     onEdit={(t) => setEditingTask(t)}
                     onDelete={handleDeleteTask}
                   />
@@ -287,6 +279,25 @@ export default function SocialFeedStream({ personnelList, refreshTrigger, onRefr
               loadFeedData();
             }}
             onCancel={() => setEditingTask(null)}
+          />
+        </Modal>
+      )}
+
+      {/* Close & Rate Task Modal */}
+      {closingTask && (
+        <Modal
+          isOpen={!!closingTask}
+          onClose={() => setClosingTask(null)}
+          title="⭐ Görevi Değerlendir ve Kapat"
+        >
+          <TaskCloseModal
+            task={closingTask}
+            onSuccess={() => {
+              setClosingTask(null);
+              onRefresh?.();
+              loadFeedData();
+            }}
+            onCancel={() => setClosingTask(null)}
           />
         </Modal>
       )}
