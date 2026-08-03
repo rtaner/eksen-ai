@@ -115,69 +115,8 @@ serve(async (req) => {
           }
         }
 
-        // Check 2: Personnel without notes for 3+ days
-        for (const personnel of allPersonnel) {
-          // Get last note for this personnel by this user
-          const { data: lastNote, error: lastNoteError } = await supabaseAdmin
-            .from('notes')
-            .select('created_at')
-            .eq('author_id', user.id)
-            .eq('personnel_id', personnel.id)
-            .order('created_at', { ascending: false })
-            .limit(1);
-
-          if (lastNoteError) {
-            console.error(`Error checking notes for personnel ${personnel.id}:`, lastNoteError);
-            continue;
-          }
-
-          let shouldNotify = false;
-
-          if (!lastNote || lastNote.length === 0) {
-            // No notes ever for this personnel - check if personnel is older than 3 days
-            const { data: personnelData } = await supabaseAdmin
-              .from('personnel')
-              .select('created_at')
-              .eq('id', personnel.id)
-              .single();
-
-            if (personnelData) {
-              const personnelCreated = new Date(personnelData.created_at);
-              personnelCreated.setHours(0, 0, 0, 0);
-              shouldNotify = personnelCreated <= threeDaysAgo;
-            }
-          } else {
-            // Check if last note is older than 3 days
-            const lastNoteDate = new Date(lastNote[0].created_at);
-            lastNoteDate.setHours(0, 0, 0, 0);
-            shouldNotify = lastNoteDate < threeDaysAgo;
-          }
-
-          if (shouldNotify) {
-            // Check if already notified today for this personnel
-            const { data: existingPersonnel } = await supabaseAdmin
-              .from('notifications')
-              .select('id')
-              .eq('user_id', user.id)
-              .eq('type', 'note_reminder_personnel')
-              .gte('created_at', todayStr)
-              .ilike('message', `%${personnel.name}%`)
-              .limit(1);
-
-            if (!existingPersonnel || existingPersonnel.length === 0) {
-              await supabaseAdmin.from('notifications').insert({
-                user_id: user.id,
-                organization_id: org.id,
-                type: 'note_reminder_personnel',
-                title: 'Personel Not Hatırlatması',
-                message: `${personnel.name} isimli personel için 3 gündür not girişi yapmıyorsunuz`,
-                link: `/personnel/${personnel.id}`,
-              });
-              personnelReminderCount++;
-              console.log(`Sent personnel reminder to user ${user.id} for personnel ${personnel.id}`);
-            }
-          }
-        }
+        // Check 2: Personnel reminder check (Disabled per request)
+        // 3-day personnel note reminders have been disabled.
       }
     }
 

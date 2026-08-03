@@ -208,8 +208,43 @@ ${JSON.stringify(topDeltaPackages)}
           ].filter(Boolean)
         }));
 
+        // Fetch Store Glossary (Special Jargon)
+        const { data: glossaryData } = await supabase
+          .from('store_glossary')
+          .select('term, definition')
+          .order('term', { ascending: true });
+
+        const glossaryText = (glossaryData || [])
+          .map((g: any) => `- "${g.term}": ${g.definition}`)
+          .join('\n');
+
+        // Fetch Store-Level Notes & Tasks + Recent Personnel Performance Notes
+        const { data: storeNotesData } = await supabase
+          .from('notes')
+          .select('content, sentiment, created_at, is_store_level')
+          .order('created_at', { ascending: false })
+          .limit(15);
+
+        const { data: storeTasksData } = await supabase
+          .from('tasks')
+          .select('description, status, deadline, is_store_level')
+          .order('created_at', { ascending: false })
+          .limit(15);
+
+        const storeNotesText = (storeNotesData || [])
+          .map((n: any) => `- [${n.is_store_level ? 'MAĞAZA GENEL NOTU' : 'PERSONEL/EKİP NOTU'}] (${new Date(n.created_at).toLocaleDateString('tr-TR')}): ${n.content}`)
+          .join('\n');
+
+        const storeTasksText = (storeTasksData || [])
+          .map((t: any) => `- [${t.is_store_level ? 'MAĞAZA GENEL GÖREVİ' : 'PERSONEL GÖREVİ'}] Durum: ${t.status === 'closed' ? 'Tamamlandı' : 'Açık'} - ${t.description}`)
+          .join('\n');
+
         const execPrompt = `Sen Bozüyük AVM mağazası için çalışan uzman bir perakende stratejistisin.
-Görevin, mağazanın haftalık performans verilerini ve dışsal faktörleri (lokasyon karakteri, takvim olayları, mevsimsellik) harmanlayarak mağaza müdürüne yönelik stratejik bir "Yönetici Teşhis ve Aksiyon Raporu" hazırlamaktır.
+Görevin, mağazanın haftalık performans verilerini, sahada tutulan mağaza/personel notlarını ve dışsal faktörleri (lokasyon karakteri, takvim olayları, mevsimsellik) harmanlayarak mağaza müdürüne yönelik stratejik bir "Yönetici Teşhis ve Aksiyon Raporu" hazırlamaktır.
+
+MAĞAZA ÖZEL TERİMLER SÖZLÜĞÜ (JARGON & TANIMLAR):
+Aşağıdaki terimler bu mağaza bünyesinde özel anlamlara sahiptir. Sahada tutulan notları ve verileri değerlendirirken bu özel tanımları ESAS AL:
+${glossaryText || 'Özel terim tanımlanmamış.'}
 
 LOKASYON BİLGİSİ:
 Bozüyük AVM, Türkiye'nin en kritik transit karayolu geçiş güzergahlarından biri üzerinde yer alır. Şehirler arası seyahat eden tatilciler, aileler ve yolcular için önemli bir duraklama, dinlenme ve alışveriş noktasıdır. Mağazanın başarısı, bu transit yolcu trafiğini yakalamasına ve doğru ürün gruplarını (yolculuk, seyahat, hızlı tüketim, pratik giyim, hediye vb.) öne çıkarmasına doğrudan bağlıdır.
@@ -224,6 +259,12 @@ MAĞAZA GENEL METRİKLERİ:
 - Mağaza Ortalama Sepet Adedi (IPT): ${storeMetrics.IPT}
 - Mağaza Ortalama Sepet Tutarı (ATV): ${storeMetrics.ATV} TL
 - Toplam Ziyaretçi Sayısı (Footfall): ${storeMetrics.Footfall}
+
+MAĞAZA SAHA NOTLARI VE UYARILAR:
+${storeNotesText || 'Henüz saha notu girilmemiş.'}
+
+MAĞAZA VE EKİP GÖREVLERİ (YAPILACAKLAR LISTESI):
+${storeTasksText || 'Henüz görev kaydı bulunmuyor.'}
 
 DEPARTMAN VE REYON BAZLI ÖZET VERİLER VE ANOMALİLER:
 ${JSON.stringify(deptSummary, null, 2)}

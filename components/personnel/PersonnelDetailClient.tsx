@@ -53,26 +53,49 @@ export default function PersonnelDetailClient({
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [deletingTask, setDeletingTask] = useState<Task | null>(null);
 
+  const [groupNamesMap, setGroupNamesMap] = useState<Record<string, string>>({});
+
   // Fetch data function
   const fetchData = async () => {
     try {
       setIsLoading(true);
 
-      // Fetch notes
-      const { data: notesData, error: notesError } = await supabase
-        .from('notes')
-        .select('*')
-        .eq('personnel_id', personnel.id)
-        .order('created_at', { ascending: false });
+      // Fetch groups for this personnel
+      const { data: memberRows } = await supabase
+        .from('group_members')
+        .select('group_id, groups(id, name)')
+        .eq('personnel_id', personnel.id);
+
+      const groupIds = (memberRows || []).map((m: any) => m.group_id).filter(Boolean);
+      const gNames: Record<string, string> = {};
+      (memberRows || []).forEach((m: any) => {
+        if (m.groups) {
+          gNames[m.groups.id] = m.groups.name;
+        }
+      });
+      setGroupNamesMap(gNames);
+
+      // Fetch notes (both personnel-specific and group-specific)
+      let notesQuery = supabase.from('notes').select('*');
+      if (groupIds.length > 0) {
+        notesQuery = notesQuery.or(`personnel_id.eq.${personnel.id},group_id.in.(${groupIds.join(',')})`);
+      } else {
+        notesQuery = notesQuery.eq('personnel_id', personnel.id);
+      }
+
+      const { data: notesData, error: notesError } = await notesQuery.order('created_at', { ascending: false });
 
       if (notesError) throw notesError;
 
-      // Fetch all tasks (open and closed)
-      const { data: tasksData, error: tasksError } = await supabase
-        .from('tasks')
-        .select('*')
-        .eq('personnel_id', personnel.id)
-        .order('created_at', { ascending: false });
+      // Fetch tasks (both personnel-specific and group-specific)
+      let tasksQuery = supabase.from('tasks').select('*');
+      if (groupIds.length > 0) {
+        tasksQuery = tasksQuery.or(`personnel_id.eq.${personnel.id},group_id.in.(${groupIds.join(',')})`);
+      } else {
+        tasksQuery = tasksQuery.eq('personnel_id', personnel.id);
+      }
+
+      const { data: tasksData, error: tasksError } = await tasksQuery.order('created_at', { ascending: false });
 
       if (tasksError) throw tasksError;
 
@@ -358,6 +381,7 @@ export default function PersonnelDetailClient({
                   notes={notes}
                   tasks={[]} // Only notes in this tab
                   authorNames={authorNames}
+                  groupNames={groupNamesMap}
                   currentUserId={user?.id || ''}
                   isOwner={isOwnerRole}
                   canEditNotes={true}
@@ -397,6 +421,7 @@ export default function PersonnelDetailClient({
                   notes={[]} // Only tasks in this tab
                   tasks={tasks}
                   authorNames={authorNames}
+                  groupNames={groupNamesMap}
                   currentUserId={user?.id || ''}
                   isOwner={isOwnerRole}
                   canEditNotes={false}

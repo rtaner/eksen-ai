@@ -1,12 +1,9 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { Personnel } from '@/lib/types';
-import { usePermissions } from '@/lib/hooks/usePermissions';
-import PersonnelList from './PersonnelList';
-import PersonnelForm from './PersonnelForm';
-import Modal from '@/components/ui/Modal';
+import FeedComposer from '@/components/feed/FeedComposer';
+import SocialFeedStream from '@/components/feed/SocialFeedStream';
 
 interface PersonnelPageClientProps {
   initialPersonnel: Personnel[];
@@ -15,44 +12,27 @@ interface PersonnelPageClientProps {
 export default function PersonnelPageClient({
   initialPersonnel,
 }: PersonnelPageClientProps) {
-  const router = useRouter();
-  const { canCreate, canEdit, canDelete } = usePermissions();
-  const [personnel, setPersonnel] = useState<Personnel[]>(initialPersonnel);
-  const [showAddModal, setShowAddModal] = useState(false);
+  const [personnel] = useState<Personnel[]>(initialPersonnel);
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
 
-  const handleAdd = () => {
-    setShowAddModal(true);
-  };
-
-  const handleAddSuccess = (newPersonnel: Personnel) => {
-    setPersonnel([newPersonnel, ...personnel]);
-    setShowAddModal(false);
-    router.refresh();
+  const handleRefreshStream = () => {
+    setRefreshTrigger((prev) => prev + 1);
   };
 
   return (
-    <>
-      <PersonnelList
-        personnel={personnel}
-        canCreate={canCreate('personnel')}
-        canEdit={canEdit('personnel')}
-        canDelete={canDelete('personnel')}
-        onAdd={handleAdd}
+    <div className="space-y-6 max-w-4xl">
+      {/* Quick Post Composer */}
+      <FeedComposer
+        personnelList={personnel}
+        onPostSuccess={handleRefreshStream}
       />
 
-      {/* Add Modal */}
-      {showAddModal && (
-        <Modal
-          isOpen={showAddModal}
-          onClose={() => setShowAddModal(false)}
-          title="Yeni Personel Ekle"
-        >
-          <PersonnelForm
-            onSuccess={handleAddSuccess}
-            onCancel={() => setShowAddModal(false)}
-          />
-        </Modal>
-      )}
-    </>
+      {/* Social Stream */}
+      <SocialFeedStream
+        personnelList={personnel}
+        refreshTrigger={refreshTrigger}
+        onRefresh={handleRefreshStream}
+      />
+    </div>
   );
 }

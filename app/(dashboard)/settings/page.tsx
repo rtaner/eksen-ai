@@ -6,6 +6,8 @@ import Link from 'next/link';
 import DashboardModals from '../../../components/dashboard/DashboardModals';
 import SettingsModals from '../../../components/settings/SettingsModals';
 import InviteCodeCard from '../../../components/settings/InviteCodeCard';
+import GroupSettingsCard from '../../../components/settings/GroupSettingsCard';
+import GlossarySettingsCard from '../../../components/settings/GlossarySettingsCard';
 
 export default async function SettingsPage() {
   const supabase = await createClient();
@@ -368,7 +370,13 @@ export default async function SettingsPage() {
           activities={activities}
         />
 
-        {/* 5. Organizasyon Ayarları (Owner only) */}
+        {/* 5. Grup ve Ekip Yönetimi */}
+        <GroupSettingsCard />
+
+        {/* 5.1. Mağaza Terimler Sözlüğü (Özel Jargon) */}
+        <GlossarySettingsCard />
+
+        {/* 5.5. Organizasyon Ayarları (Owner only) */}
         {isOwner && <SettingsModals item={organizationItem} />}
 
         {/* 6. Kullanıcı Yönetimi (Owner only) */}

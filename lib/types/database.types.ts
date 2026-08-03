@@ -136,10 +136,59 @@ export interface Database {
           updated_at?: string;
         };
       };
+      groups: {
+        Row: {
+          id: string;
+          organization_id: string;
+          name: string;
+          description: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          organization_id: string;
+          name: string;
+          description?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          organization_id?: string;
+          name?: string;
+          description?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+      };
+      group_members: {
+        Row: {
+          id: string;
+          group_id: string;
+          personnel_id: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          group_id: string;
+          personnel_id: string;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          group_id?: string;
+          personnel_id?: string;
+          created_at?: string;
+        };
+      };
       notes: {
         Row: {
           id: string;
-          personnel_id: string;
+          personnel_id: string | null;
+          group_id: string | null;
+          organization_id: string | null;
+          is_store_level: boolean;
           author_id: string;
           content: string;
           is_voice_note: boolean;
@@ -148,7 +197,10 @@ export interface Database {
         };
         Insert: {
           id?: string;
-          personnel_id: string;
+          personnel_id?: string | null;
+          group_id?: string | null;
+          organization_id?: string | null;
+          is_store_level?: boolean;
           author_id: string;
           content: string;
           is_voice_note?: boolean;
@@ -157,7 +209,10 @@ export interface Database {
         };
         Update: {
           id?: string;
-          personnel_id?: string;
+          personnel_id?: string | null;
+          group_id?: string | null;
+          organization_id?: string | null;
+          is_store_level?: boolean;
           author_id?: string;
           content?: string;
           is_voice_note?: boolean;
@@ -168,7 +223,10 @@ export interface Database {
       tasks: {
         Row: {
           id: string;
-          personnel_id: string;
+          personnel_id: string | null;
+          group_id: string | null;
+          organization_id: string | null;
+          is_store_level: boolean;
           description: string;
           deadline: string;
           status: TaskStatus;
@@ -179,7 +237,10 @@ export interface Database {
         };
         Insert: {
           id?: string;
-          personnel_id: string;
+          personnel_id?: string | null;
+          group_id?: string | null;
+          organization_id?: string | null;
+          is_store_level?: boolean;
           description: string;
           deadline: string;
           status?: TaskStatus;
@@ -190,7 +251,10 @@ export interface Database {
         };
         Update: {
           id?: string;
-          personnel_id?: string;
+          personnel_id?: string | null;
+          group_id?: string | null;
+          organization_id?: string | null;
+          is_store_level?: boolean;
           description?: string;
           deadline?: string;
           status?: TaskStatus;

@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { ProcessedStoreDashboard, DepartmentNode } from '@/lib/services/store-analysis-engine';
 import LifestyleAccordion from './LifestyleAccordion';
+import StoreNotesTasksSection from './StoreNotesTasksSection';
 import { createClient } from '@/lib/supabase/client';
 
 type TabType = 'lifestyles' | 'classes' | 'buyers';

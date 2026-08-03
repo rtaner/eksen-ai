@@ -45,11 +45,35 @@ export interface Personnel {
   updated_at: string;
 }
 
+export interface Group {
+  id: string;
+  organization_id: string;
+  name: string;
+  description?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface GroupMember {
+  id: string;
+  group_id: string;
+  personnel_id: string;
+  created_at: string;
+}
+
+export interface GroupWithMembers extends Group {
+  members?: Personnel[];
+  member_count?: number;
+}
+
 export type NoteSentiment = 'positive' | 'negative' | 'neutral';
 
 export interface Note {
   id: string;
-  personnel_id: string;
+  personnel_id?: string | null;
+  group_id?: string | null;
+  organization_id?: string | null;
+  is_store_level?: boolean;
   author_id: string;
   content: string;
   is_voice_note: boolean;
@@ -60,7 +84,10 @@ export interface Note {
 
 export interface Task {
   id: string;
-  personnel_id: string;
+  personnel_id?: string | null;
+  group_id?: string | null;
+  organization_id?: string | null;
+  is_store_level?: boolean;
   author_id?: string; // Optional for backward compatibility
   description: string;
   deadline: string;
@@ -84,10 +111,13 @@ export interface AIAnalysis {
 // Extended types with relations
 export interface NoteWithAuthor extends Note {
   author: Profile;
+  group?: Group | null;
+  personnel?: Personnel | null;
 }
 
 export interface TaskWithPersonnel extends Task {
-  personnel: Personnel;
+  personnel?: Personnel | null;
+  group?: Group | null;
 }
 
 export interface PersonnelWithStats extends Personnel {
@@ -149,6 +179,15 @@ export interface TaskFormData {
 
 export interface TaskCloseData {
   star_rating: number;
+}
+
+export interface StoreGlossaryItem {
+  id: string;
+  organization_id: string;
+  term: string;
+  definition: string;
+  created_at: string;
+  updated_at: string;
 }
 
 // API Response types

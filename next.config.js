@@ -2,7 +2,6 @@
 const nextConfig = {
   reactStrictMode: true,
   // Performance optimizations
-  swcMinify: true,
   compiler: {
     // Temporarily enable console logs in production for debugging
     removeConsole: false,

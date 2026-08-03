@@ -45,23 +45,45 @@ serve(async (req) => {
       );
     }
 
-    // Fetch notes in date range
-    const { data: notes, error: notesError } = await supabase
+    // Fetch groups for this personnel
+    const { data: memberRows } = await supabase
+      .from('group_members')
+      .select('group_id')
+      .eq('personnel_id', personnelId);
+
+    const groupIds = (memberRows || []).map((m: any) => m.group_id).filter(Boolean);
+
+    // Fetch notes in date range (personnel or group)
+    let notesQuery = supabase
       .from('notes')
-      .select('id, content, sentiment, is_voice_note, created_at, author_id')
-      .eq('personnel_id', personnelId)
+      .select('id, content, sentiment, is_voice_note, created_at, author_id, group_id, groups(name)');
+
+    if (groupIds.length > 0) {
+      notesQuery = notesQuery.or(`personnel_id.eq.${personnelId},group_id.in.(${groupIds.join(',')})`);
+    } else {
+      notesQuery = notesQuery.eq('personnel_id', personnelId);
+    }
+
+    const { data: notes, error: notesError } = await notesQuery
       .gte('created_at', dateRangeStart)
       .lte('created_at', dateRangeEnd)
       .order('created_at', { ascending: true });
 
     if (notesError) throw notesError;
 
-    // Fetch closed tasks in date range
-    const { data: tasks, error: tasksError } = await supabase
+    // Fetch closed tasks in date range (personnel or group)
+    let tasksQuery = supabase
       .from('tasks')
-      .select('id, description, star_rating, completed_at, deadline, status, created_at')
-      .eq('personnel_id', personnelId)
-      .eq('status', 'closed')
+      .select('id, description, star_rating, completed_at, deadline, status, created_at, group_id, groups(name)')
+      .eq('status', 'closed');
+
+    if (groupIds.length > 0) {
+      tasksQuery = tasksQuery.or(`personnel_id.eq.${personnelId},group_id.in.(${groupIds.join(',')})`);
+    } else {
+      tasksQuery = tasksQuery.eq('personnel_id', personnelId);
+    }
+
+    const { data: tasks, error: tasksError } = await tasksQuery
       .gte('completed_at', dateRangeStart)
       .lte('completed_at', dateRangeEnd)
       .order('completed_at', { ascending: true });

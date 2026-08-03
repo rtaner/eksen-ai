@@ -2,18 +2,19 @@
 
 import { useState, useEffect } from 'react';
 import { createClient } from '@/lib/supabase/client';
-import type { Task } from '@/lib/types';
+import type { Task, Group, Personnel } from '@/lib/types';
 import Button from '@/components/ui/Button';
 
 interface TaskFormProps {
-  personnelId: string;
+  personnelId?: string;
+  groupId?: string;
+  isStoreLevel?: boolean;
   editingTask?: Task | null;
   initialDescription?: string;
   onSuccess?: () => void;
   onCancel?: () => void;
 }
 
-// Helper function to get today's date in local timezone (YYYY-MM-DD format)
 const getTodayLocalDate = () => {
   const today = new Date();
   const year = today.getFullYear();
@@ -24,6 +25,8 @@ const getTodayLocalDate = () => {
 
 export default function TaskForm({
   personnelId,
+  groupId,
+  isStoreLevel,
   editingTask,
   initialDescription,
   onSuccess,
@@ -34,6 +37,21 @@ export default function TaskForm({
   const [deadline, setDeadline] = useState(
     editingTask?.deadline || getTodayLocalDate()
   );
+  const [targetType, setTargetType] = useState<'personnel' | 'group' | 'store'>(
+    editingTask?.is_store_level || isStoreLevel
+      ? 'store'
+      : editingTask?.group_id || groupId
+      ? 'group'
+      : 'personnel'
+  );
+  const [selectedGroupId, setSelectedGroupId] = useState<string>(
+    editingTask?.group_id || groupId || ''
+  );
+  const [selectedPersonnelId, setSelectedPersonnelId] = useState<string>(
+    editingTask?.personnel_id || personnelId || ''
+  );
+  const [groups, setGroups] = useState<Group[]>([]);
+  const [allPersonnel, setAllPersonnel] = useState<Personnel[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isRecording, setIsRecording] = useState(false);
@@ -41,6 +59,31 @@ export default function TaskForm({
   const [silenceTimer, setSilenceTimer] = useState<NodeJS.Timeout | null>(null);
 
   const isEditMode = !!editingTask;
+
+  // Load groups and personnel
+  useEffect(() => {
+    async function loadOptions() {
+      const [{ data: groupsData }, { data: personnelData }] = await Promise.all([
+        supabase.from('groups').select('*').order('name', { ascending: true }),
+        supabase.from('personnel').select('*').order('name', { ascending: true }),
+      ]);
+
+      if (groupsData && groupsData.length > 0) {
+        setGroups(groupsData);
+        if (!selectedGroupId && targetType === 'group') {
+          setSelectedGroupId(groupsData[0].id);
+        }
+      }
+
+      if (personnelData && personnelData.length > 0) {
+        setAllPersonnel(personnelData);
+        if (!selectedPersonnelId && targetType === 'personnel') {
+          setSelectedPersonnelId(personnelData[0].id);
+        }
+      }
+    }
+    loadOptions();
+  }, []);
 
   // Initialize speech recognition
   useEffect(() => {
@@ -58,7 +101,6 @@ export default function TaskForm({
       recognitionInstance.lang = 'tr-TR';
 
       recognitionInstance.onresult = (event: any) => {
-        // Clear silence timer when speech is detected
         if (silenceTimer) {
           clearTimeout(silenceTimer);
         }
@@ -79,13 +121,12 @@ export default function TaskForm({
           setDescription((prev) => prev + finalTranscript);
         }
 
-        // Start new silence timer (3 seconds)
         const timer = setTimeout(() => {
           if (recognitionInstance && isRecording) {
             recognitionInstance.stop();
             setIsRecording(false);
           }
-        }, 3000); // 3 seconds of silence
+        }, 3000);
 
         setSilenceTimer(timer);
       };
@@ -156,7 +197,16 @@ export default function TaskForm({
       return;
     }
 
-    // Stop recording if active
+    if (targetType === 'group' && !selectedGroupId) {
+      setError('Lütfen bir grup seçin veya grup oluşturun.');
+      return;
+    }
+
+    if (targetType === 'personnel' && !selectedPersonnelId && !personnelId) {
+      setError('Lütfen görevi atamak için bir personel seçin.');
+      return;
+    }
+
     if (isRecording && recognition) {
       recognition.stop();
       setIsRecording(false);
@@ -169,72 +219,52 @@ export default function TaskForm({
     setError(null);
 
     try {
-      // Get current user
       const {
         data: { user },
       } = await supabase.auth.getUser();
 
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('organization_id')
+        .eq('id', user?.id)
+        .single();
+
+      const finalPersonnelId = targetType === 'personnel' ? selectedPersonnelId || personnelId || null : null;
+      const finalGroupId = targetType === 'group' ? selectedGroupId || null : null;
+      const finalIsStoreLevel = targetType === 'store';
+
       if (isEditMode && editingTask) {
-        // Update existing task
         const { error: updateError } = await supabase
           .from('tasks')
           .update({
             description: description.trim(),
             deadline,
+            personnel_id: finalPersonnelId,
+            group_id: finalGroupId,
+            is_store_level: finalIsStoreLevel,
           })
           .eq('id', editingTask.id);
 
         if (updateError) throw updateError;
       } else {
-        // Create new task with author_id
-        const { data: newTask, error: insertError } = await supabase
+        const insertData: any = {
+          author_id: user?.id,
+          description: description.trim(),
+          deadline,
+          status: 'open',
+          personnel_id: finalPersonnelId,
+          group_id: finalGroupId,
+          is_store_level: finalIsStoreLevel,
+          organization_id: profile?.organization_id || null,
+        };
+
+        const { error: insertError } = await supabase
           .from('tasks')
-          .insert({
-            personnel_id: personnelId,
-            author_id: user?.id,
-            description: description.trim(),
-            deadline,
-            status: 'open',
-          })
-          .select()
-          .single();
+          .insert(insertData);
 
         if (insertError) throw insertError;
-
-        // Get personnel and organization info for notification
-        const { data: personnel } = await supabase
-          .from('personnel')
-          .select('name, organization_id')
-          .eq('id', personnelId)
-          .single();
-
-        if (personnel && newTask) {
-          // Get all managers and owners in the organization to notify them
-          const { data: usersToNotify } = await supabase
-            .from('profiles')
-            .select('id')
-            .eq('organization_id', personnel.organization_id)
-            .in('role', ['owner', 'manager']);
-
-          // Create notifications for all managers and owners
-          if (usersToNotify && usersToNotify.length > 0) {
-            const notifications = usersToNotify.map((profile) => ({
-              user_id: profile.id,
-              organization_id: personnel.organization_id,
-              type: 'task_assigned',
-              title: 'Yeni Görev Atandı',
-              message: `${personnel.name} için yeni görev: ${description.trim().substring(0, 100)}${description.length > 100 ? '...' : ''}`,
-              link: `/personnel/${personnelId}?tab=tasks`,
-            }));
-
-            await supabase.from('notifications').insert(notifications);
-          }
-        }
       }
 
-      // Clear form
-      setDescription('');
-      setDeadline(getTodayLocalDate());
       onSuccess?.();
     } catch (err: any) {
       console.error('Error saving task:', err);
@@ -246,22 +276,110 @@ export default function TaskForm({
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
+      {/* Target Selector: Personnel vs Group vs Store */}
+      <div className="bg-gray-50 p-2 rounded-xl border border-gray-200 space-y-2">
+        <div className="flex gap-2 flex-wrap">
+          <button
+            type="button"
+            onClick={() => setTargetType('personnel')}
+            className={`flex-1 py-1.5 px-3 text-xs font-semibold rounded-lg transition-all ${
+              targetType === 'personnel'
+                ? 'bg-white text-blue-700 shadow-sm border border-blue-200'
+                : 'text-gray-600 hover:text-gray-900'
+            }`}
+          >
+            👤 Bireysel Görev
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setTargetType('group');
+              if (!selectedGroupId && groups.length > 0) {
+                setSelectedGroupId(groups[0].id);
+              }
+            }}
+            className={`flex-1 py-1.5 px-3 text-xs font-semibold rounded-lg transition-all ${
+              targetType === 'group'
+                ? 'bg-white text-blue-700 shadow-sm border border-blue-200'
+                : 'text-gray-600 hover:text-gray-900'
+            }`}
+          >
+            👥 Ekip Görevi
+          </button>
+          <button
+            type="button"
+            onClick={() => setTargetType('store')}
+            className={`flex-1 py-1.5 px-3 text-xs font-semibold rounded-lg transition-all ${
+              targetType === 'store'
+                ? 'bg-white text-purple-700 shadow-sm border border-purple-200 font-bold'
+                : 'text-gray-600 hover:text-gray-900'
+            }`}
+          >
+            🏬 Mağaza Genel (Yapılacak)
+          </button>
+        </div>
+
+        {targetType === 'personnel' && !personnelId && allPersonnel.length > 0 && (
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Atanacak Personeli Seçin:</label>
+            <select
+              value={selectedPersonnelId}
+              onChange={(e) => setSelectedPersonnelId(e.target.value)}
+              className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white"
+            >
+              {allPersonnel.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+
+        {targetType === 'group' && (
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Hedef Grup Seçin:</label>
+            {groups.length === 0 ? (
+              <p className="text-xs text-amber-600">Henüz grup oluşturulmamış.</p>
+            ) : (
+              <select
+                value={selectedGroupId}
+                onChange={(e) => setSelectedGroupId(e.target.value)}
+                className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white"
+              >
+                {groups.map((g) => (
+                  <option key={g.id} value={g.id}>
+                    {g.name}
+                  </option>
+                ))}
+              </select>
+            )}
+          </div>
+        )}
+      </div>
+
       {error && (
         <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
           <p className="text-sm text-red-800">{error}</p>
         </div>
       )}
 
-      {/* Task description with voice input */}
+      {/* Description input with speech recognition */}
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-2">
-          Görev Açıklaması
+          Görev Açıklaması *
         </label>
         <div className="relative">
           <textarea
             value={description}
             onChange={(e) => setDescription(e.target.value)}
-            placeholder="Görev açıklamasını buraya yazın veya mikrofon ile dikte edin..."
+            placeholder={
+              targetType === 'store'
+                ? "Mağaza için genel görev / yapılacaklar detayı (Örn: Depo sayımı yapılacak, yeni sezon reyonları kontrol edilecek...)"
+                : targetType === 'group'
+                ? "Ekip için verilecek görevi açıklayın..."
+                : "Görev detaylarını buraya yazın..."
+            }
             disabled={isLoading}
             rows={4}
             className="w-full px-4 py-3 pr-14 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none disabled:bg-gray-100 disabled:cursor-not-allowed"
@@ -338,7 +456,6 @@ export default function TaskForm({
           type="button"
           variant="secondary"
           onClick={() => {
-            // Stop recording if active
             if (isRecording && recognition) {
               recognition.stop();
               setIsRecording(false);
@@ -358,7 +475,7 @@ export default function TaskForm({
           disabled={isLoading || !description.trim()}
           className="w-full sm:w-auto order-1 sm:order-2"
         >
-          {isLoading ? 'Kaydediliyor...' : isEditMode ? 'Güncelle' : 'Görev Ata'}
+          {isLoading ? 'Kaydediliyor...' : isEditMode ? 'Güncelle / Atamayı Değiştir' : 'Görev / Yapılacak Ekle'}
         </Button>
       </div>
     </form>

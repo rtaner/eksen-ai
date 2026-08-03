@@ -7,6 +7,8 @@ export interface Note {
   is_voice_note: boolean;
   created_at: string;
   author_id: string;
+  group_id?: string | null;
+  groups?: { name?: string } | null;
 }
 
 export interface Task {
@@ -17,6 +19,8 @@ export interface Task {
   deadline: string;
   status: 'open' | 'closed';
   created_at: string;
+  group_id?: string | null;
+  groups?: { name?: string } | null;
 }
 
 export interface AuthorInfo {
@@ -66,22 +70,30 @@ export function formatDataForPrompt(
   const closedTasks = tasks.filter((t) => t.status === 'closed' && t.star_rating);
 
   // Format notes for JSON
-  const formattedNotes = notes.map((note) => ({
-    tarih: new Date(note.created_at).toLocaleDateString('tr-TR'),
-    tip: 'not',
-    icerik: note.content,
-    duygu: note.sentiment === 'positive' ? 'olumlu' : note.sentiment === 'negative' ? 'olumsuz' : 'notr',
-    giren_yonetici: actualAuthorNames[note.author_id] || 'Bilinmeyen',
-    sesli_not: note.is_voice_note,
-  }));
+  const formattedNotes = notes.map((note) => {
+    const groupName = note.groups?.name;
+    return {
+      tarih: new Date(note.created_at).toLocaleDateString('tr-TR'),
+      tip: note.group_id ? 'grup_notu' : 'bireysel_not',
+      kategori: groupName ? `Ekip Notu (${groupName})` : 'Bireysel Not',
+      icerik: groupName ? `[${groupName} Grubu Notu]: ${note.content}` : note.content,
+      duygu: note.sentiment === 'positive' ? 'olumlu' : note.sentiment === 'negative' ? 'olumsuz' : 'notr',
+      giren_yonetici: actualAuthorNames[note.author_id] || 'Bilinmeyen',
+      sesli_not: note.is_voice_note,
+    };
+  });
 
   // Format tasks for JSON
-  const formattedTasks = closedTasks.map((task) => ({
-    tarih: task.completed_at ? new Date(task.completed_at).toLocaleDateString('tr-TR') : '',
-    tip: 'görev',
-    icerik: task.description,
-    puan: task.star_rating,
-  }));
+  const formattedTasks = closedTasks.map((task) => {
+    const groupName = task.groups?.name;
+    return {
+      tarih: task.completed_at ? new Date(task.completed_at).toLocaleDateString('tr-TR') : '',
+      tip: task.group_id ? 'grup_gorevi' : 'bireysel_gorev',
+      kategori: groupName ? `Ekip Görevi (${groupName})` : 'Bireysel Görev',
+      icerik: groupName ? `[${groupName} Grubu Görevi]: ${task.description}` : task.description,
+      puan: task.star_rating,
+    };
+  });
 
   // Format checklists for JSON (including items completed/not completed details)
   const formattedChecklists = checklists.map((checklist) => {

@@ -65,22 +65,12 @@ SELECT cron.schedule(
   $$
 );
 
--- 5. Akşam 22:15 için not hatırlatmaları - Personel bazlı (19:15 UTC = 22:15 TR)
-SELECT cron.schedule(
-  'check-note-reminders-personnel',
-  '15 19 * * *',
-  $$
-  SELECT
-    net.http_post(
-      url := 'https://fnkaythbzngszjfymtgm.supabase.co/functions/v1/check-note-reminders',
-      headers := jsonb_build_object(
-        'Content-Type', 'application/json',
-        'Authorization', 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZua2F5dGhiem5nc3pqZnltdGdtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjE2NDkzMzUsImV4cCI6MjA3NzIyNTMzNX0.DFDIuWmZhj5miXCmMQP1EEOAAoMQ3XKTjaT7MPrDsFA'
-      ),
-      body := '{}'::jsonb
-    ) as request_id;
-  $$
-);
+-- 5. Akşam 22:15 için not hatırlatmaları - Personel bazlı (İptal Edildi)
+-- SELECT cron.schedule(
+--   'check-note-reminders-personnel',
+--   '15 19 * * *',
+--   ...
+-- );
 
 -- 6. Gece 03:00 için eski bildirimleri temizle (00:00 UTC = 03:00 TR)
 SELECT cron.schedule(

@@ -216,7 +216,7 @@ serve(async (req) => {
             results.push({ subscription: sub.id, success: false, status: response.status });
           }
         }
-      } catch (error) {
+      } catch (error: any) {
         console.error('Error sending push to subscription:', sub.id, error);
         results.push({ subscription: sub.id, success: false, error: error.message });
       }
@@ -230,7 +230,7 @@ serve(async (req) => {
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
     );
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error:', error);
     return new Response(
       JSON.stringify({ success: false, error: error.message }),

@@ -12,6 +12,7 @@ interface PersonnelListProps {
   canEdit?: boolean;
   canDelete?: boolean;
   onAdd?: () => void;
+  onManageGroups?: () => void;
 }
 
 export default function PersonnelList({
@@ -20,6 +21,7 @@ export default function PersonnelList({
   canEdit = false,
   canDelete = false,
   onAdd,
+  onManageGroups,
 }: PersonnelListProps) {
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -30,16 +32,6 @@ export default function PersonnelList({
 
   return (
     <div className="space-y-4">
-      {/* Title and Add button */}
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-gray-900">Personel Listesi</h1>
-        {canCreate && onAdd && (
-          <Button variant="primary" onClick={onAdd}>
-            + Personel Ekle
-          </Button>
-        )}
-      </div>
-
       {/* Search */}
       <div>
         <Input

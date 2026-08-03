@@ -49,22 +49,44 @@ serve(async (req) => {
       );
     }
 
-    // 5. Fetch notes in date range
-    const { data: notes, error: notesError } = await supabase
+    // Fetch groups for this personnel
+    const { data: memberRows } = await supabase
+      .from('group_members')
+      .select('group_id')
+      .eq('personnel_id', personnelId);
+
+    const groupIds = (memberRows || []).map((m: any) => m.group_id).filter(Boolean);
+
+    // 5. Fetch notes in date range (personnel or group)
+    let notesQuery = supabase
       .from('notes')
-      .select('id, content, sentiment, is_voice_note, created_at, author_id')
-      .eq('personnel_id', personnelId)
+      .select('id, content, sentiment, is_voice_note, created_at, author_id, group_id, groups(name)');
+
+    if (groupIds.length > 0) {
+      notesQuery = notesQuery.or(`personnel_id.eq.${personnelId},group_id.in.(${groupIds.join(',')})`);
+    } else {
+      notesQuery = notesQuery.eq('personnel_id', personnelId);
+    }
+
+    const { data: notes, error: notesError } = await notesQuery
       .gte('created_at', dateRangeStart)
       .lte('created_at', dateRangeEnd)
       .order('created_at', { ascending: true });
 
     if (notesError) throw notesError;
 
-    // 6. Fetch ALL tasks (open and closed) in date range for trend analysis
-    const { data: tasks, error: tasksError } = await supabase
+    // 6. Fetch ALL tasks (open and closed) in date range for trend analysis (personnel or group)
+    let tasksQuery = supabase
       .from('tasks')
-      .select('id, description, star_rating, completed_at, deadline, status, created_at')
-      .eq('personnel_id', personnelId)
+      .select('id, description, star_rating, completed_at, deadline, status, created_at, group_id, groups(name)');
+
+    if (groupIds.length > 0) {
+      tasksQuery = tasksQuery.or(`personnel_id.eq.${personnelId},group_id.in.(${groupIds.join(',')})`);
+    } else {
+      tasksQuery = tasksQuery.eq('personnel_id', personnelId);
+    }
+
+    const { data: tasks, error: tasksError } = await tasksQuery
       .gte('created_at', dateRangeStart)
       .lte('created_at', dateRangeEnd)
       .order('created_at', { ascending: true });

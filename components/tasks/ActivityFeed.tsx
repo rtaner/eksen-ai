@@ -9,6 +9,7 @@ interface ActivityFeedProps {
   notes: Note[];
   tasks: Task[];
   authorNames: Record<string, string>;
+  groupNames?: Record<string, string>;
   currentUserId: string;
   isOwner: boolean;
   canEditNotes: boolean;
@@ -29,6 +30,7 @@ export default function ActivityFeed({
   notes,
   tasks,
   authorNames,
+  groupNames,
   currentUserId,
   isOwner,
   canEditNotes,
@@ -127,6 +129,7 @@ export default function ActivityFeed({
                   key={note.id}
                   note={note}
                   authorName={authorName}
+                  groupName={note.group_id ? groupNames?.[note.group_id] : undefined}
                   canEdit={isOwner || (canEditNotes && note.author_id === currentUserId)}
                   canDelete={isOwner || (canDeleteNotes && note.author_id === currentUserId)}
                   onEdit={onEditNote}
@@ -143,6 +146,7 @@ export default function ActivityFeed({
                   key={task.id}
                   task={task}
                   authorName={taskAuthorName}
+                  groupName={task.group_id ? groupNames?.[task.group_id] : undefined}
                   canEdit={isOwner || (canEditTasks && isOwnTask)}
                   canDelete={isOwner || (canDeleteTasks && isOwnTask)}
                   onClose={onCloseTask}
