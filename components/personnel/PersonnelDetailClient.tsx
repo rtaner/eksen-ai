@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { Personnel, Note, Task } from '@/lib/types';
+import { Personnel, Note, Task, OneOnOneMeeting, Role } from '@/lib/types';
 import { useRealtime } from '@/lib/hooks/useRealtime';
 import { useAuth } from '@/lib/contexts/AuthContext';
 import { usePermissions } from '@/lib/hooks/usePermissions';
@@ -17,6 +17,7 @@ import TaskForm from '@/components/tasks/TaskForm';
 import TaskCloseModal from '@/components/tasks/TaskCloseModal';
 import TabNavigation from './TabNavigation';
 import ChecklistsTab from './ChecklistsTab';
+import OneOnOneMeetingModal from '@/components/meetings/OneOnOneMeetingModal';
 import { useToast } from '@/lib/contexts/ToastContext';
 
 interface PersonnelDetailClientProps {
@@ -39,9 +40,12 @@ export default function PersonnelDetailClient({
     isOwner: isOwnerRole 
   } = usePermissions();
   
-  const [activeTab, setActiveTab] = useState<'notes' | 'tasks' | 'checklists'>('notes');
+  const [activeTab, setActiveTab] = useState<'notes' | 'tasks' | 'checklists' | 'one-on-one'>('notes');
   const [notes, setNotes] = useState<Note[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [oneOnOneMeetings, setOneOnOneMeetings] = useState<OneOnOneMeeting[]>([]);
+  const [isOwnerOrManager, setIsOwnerOrManager] = useState(false);
+  const [isOneOnOneModalOpen, setIsOneOnOneModalOpen] = useState(false);
   const [authorNames, setAuthorNames] = useState<Record<string, string>>({});
   const [isLoading, setIsLoading] = useState(true);
   const [isNoteModalOpen, setIsNoteModalOpen] = useState(false);
@@ -60,6 +64,17 @@ export default function PersonnelDetailClient({
     try {
       setIsLoading(true);
 
+      // Check current user role for 1-on-1 meeting access
+      const { data: { user: currentUser } } = await supabase.auth.getUser();
+      let isOm = false;
+      if (currentUser) {
+        const { data: prof } = await supabase.from('profiles').select('role').eq('id', currentUser.id).single();
+        if (prof?.role === 'owner' || prof?.role === 'manager') {
+          isOm = true;
+        }
+      }
+      setIsOwnerOrManager(isOm);
+
       // Fetch groups for this personnel
       const { data: memberRows } = await supabase
         .from('group_members')
@@ -74,6 +89,17 @@ export default function PersonnelDetailClient({
         }
       });
       setGroupNamesMap(gNames);
+
+      // Fetch 1-on-1 meetings if owner or manager
+      if (isOm) {
+        const { data: meetingsData } = await supabase
+          .from('one_on_one_meetings')
+          .select('*')
+          .eq('personnel_id', personnel.id)
+          .order('created_at', { ascending: false });
+
+        setOneOnOneMeetings(meetingsData || []);
+      }
 
       // Fetch notes (both personnel-specific and group-specific)
       let notesQuery = supabase.from('notes').select('*');
@@ -294,7 +320,16 @@ export default function PersonnelDetailClient({
             </div>
             
             {/* Action buttons */}
-            <div className="flex gap-3">
+            <div className="flex gap-3 flex-wrap">
+              {isOwnerOrManager && (
+                <button
+                  onClick={() => setIsOneOnOneModalOpen(true)}
+                  className="flex items-center gap-2 px-5 py-3 bg-gradient-to-r from-purple-600 to-indigo-700 hover:from-purple-700 hover:to-indigo-800 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all duration-200 min-h-[48px]"
+                >
+                  <span>🤝</span>
+                  1-on-1 Görüşme Yap
+                </button>
+              )}
               {canCreateNoteFor(personnel.id, personnel.metadata) && (
                 <button
                   onClick={() => setIsNoteModalOpen(true)}
@@ -327,7 +362,8 @@ export default function PersonnelDetailClient({
         {/* Tab Navigation */}
         <TabNavigation 
           activeTab={activeTab} 
-          onTabChange={(tab) => setActiveTab(tab as 'notes' | 'tasks' | 'checklists')} 
+          onTabChange={(tab) => setActiveTab(tab as any)} 
+          showOneOnOneTab={isOwnerOrManager}
         />
 
         <div className="p-6 space-y-4">
@@ -442,6 +478,100 @@ export default function PersonnelDetailClient({
           {/* Checklists Tab */}
           {activeTab === 'checklists' && (
             <ChecklistsTab personnelId={personnel.id} />
+          )}
+
+          {/* 1-on-1 Meetings Tab (Owner/Manager Only) */}
+          {activeTab === 'one-on-one' && isOwnerOrManager && (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+                <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+                  <span>🤝</span> 1-on-1 Görüşmeler & Taahhütler
+                </h2>
+                <button
+                  onClick={() => setIsOneOnOneModalOpen(true)}
+                  className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white text-xs font-semibold rounded-xl shadow-sm transition-all"
+                >
+                  + Yeni Görüşme Kaydet
+                </button>
+              </div>
+
+              {oneOnOneMeetings.length === 0 ? (
+                <div className="text-center py-12 bg-gray-50 rounded-2xl border border-dashed border-gray-200 p-6">
+                  <p className="text-gray-500 font-medium text-sm">Henüz bu personel ile 1-on-1 görüşme kaydı bulunmuyor.</p>
+                  <p className="text-xs text-gray-400 mt-1">Görüşme yapıp taahhüt almak için yukarıdaki butona tıklayabilirsiniz.</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {oneOnOneMeetings.map((m) => (
+                    <div key={m.id} className="bg-white rounded-2xl border border-gray-200 p-5 shadow-2xs space-y-4">
+                      {/* Header */}
+                      <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+                        <div className="flex items-center gap-3">
+                          <span className="px-3 py-1 bg-purple-100 text-purple-800 font-bold text-xs rounded-lg">
+                            ⭐ Öz-Puan: {m.self_rating}/10
+                          </span>
+                          <span className="text-xs text-gray-500 font-medium">
+                            📅 Görüşme Tarihi: {m.meeting_date}
+                          </span>
+                        </div>
+                        <span className="text-xs font-semibold px-2.5 py-1 bg-emerald-100 text-emerald-700 rounded-full">
+                          {m.status === 'completed' ? 'Tamamlandı' : 'Taslak'}
+                        </span>
+                      </div>
+
+                      {/* Dual Commitments */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <div className="p-3.5 bg-emerald-50/60 rounded-xl border border-emerald-200/60 space-y-1">
+                          <span className="block text-xs font-bold text-emerald-900">👤 Personel Taahhüdü:</span>
+                          <p className="text-xs text-emerald-800 whitespace-pre-wrap">
+                            {m.personnel_commitment || 'Taahhüt belirtilmedi'}
+                          </p>
+                        </div>
+                        <div className="p-3.5 bg-purple-50/60 rounded-xl border border-purple-200/60 space-y-1">
+                          <span className="block text-xs font-bold text-purple-900">👔 Yönetici Taahhüdü:</span>
+                          <p className="text-xs text-purple-800 whitespace-pre-wrap">
+                            {m.manager_commitment || 'Taahhüt belirtilmedi'}
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Answer details accordion */}
+                      <details className="text-xs text-gray-600 bg-gray-50 rounded-xl p-3 cursor-pointer">
+                        <summary className="font-semibold text-gray-800 hover:text-purple-700 transition-colors">
+                          📋 Görüşme Soru-Cevap Detaylarını Göster / Gizle
+                        </summary>
+                        <div className="mt-3 space-y-2 pt-2 border-t border-gray-200 grid grid-cols-1 md:grid-cols-2 gap-3">
+                          {m.answers?.motivation && (
+                            <div><span className="font-bold text-gray-700">🔥 Motivasyon:</span> {m.answers.motivation}</div>
+                          )}
+                          {m.answers?.challenges && (
+                            <div><span className="font-bold text-gray-700">🚧 Zorlandığı Konu:</span> {m.answers.challenges}</div>
+                          )}
+                          {m.answers?.team_changes && (
+                            <div><span className="font-bold text-gray-700">👥 Ekip Değişim İstek:</span> {m.answers.team_changes}</div>
+                          )}
+                          {m.answers?.proudest_accomplishment && (
+                            <div><span className="font-bold text-gray-700">🏆 Gurur Duyduğu Başarı:</span> {m.answers.proudest_accomplishment}</div>
+                          )}
+                          {m.answers?.manager_support && (
+                            <div><span className="font-bold text-gray-700">🤝 Beklenen Yönetici Desteği:</span> {m.answers.manager_support}</div>
+                          )}
+                          {m.answers?.store_improvements && (
+                            <div><span className="font-bold text-gray-700">🏬 Mağaza Değişim İstek:</span> {m.answers.store_improvements}</div>
+                          )}
+                          {m.answers?.training_needed && (
+                            <div><span className="font-bold text-gray-700">🎓 İstenen Eğitim:</span> {m.answers.training_needed}</div>
+                          )}
+                          {m.answers?.preferred_mentor && (
+                            <div><span className="font-bold text-gray-700">👥 Mentör Tercihi:</span> {m.answers.preferred_mentor}</div>
+                          )}
+                        </div>
+                      </details>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           )}
         </div>
       </Card>
@@ -558,6 +688,17 @@ export default function PersonnelDetailClient({
           </div>
         </div>
       </Modal>
+
+      {/* 1-on-1 Meeting Modal */}
+      {isOwnerOrManager && (
+        <OneOnOneMeetingModal
+          isOpen={isOneOnOneModalOpen}
+          onClose={() => setIsOneOnOneModalOpen(false)}
+          personnelId={personnel.id}
+          personnelName={personnel.name}
+          onSuccess={fetchData}
+        />
+      )}
     </div>
   );
 }

@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { AIAnalysis } from '@/lib/types/analyses';
 import { capitalizeFirst } from '@/lib/utils/textFormat';
@@ -9,6 +10,7 @@ import YetkinlikDisplay from './displays/YetkinlikDisplay';
 import EgilimDisplay from './displays/EgilimDisplay';
 import ButunlesikDisplay from './displays/ButunlesikDisplay';
 import KapsamliDisplay from './displays/KapsamliDisplay';
+import OneOnOneMeetingModal from '@/components/meetings/OneOnOneMeetingModal';
 
 interface AnalysisDetailClientProps {
   analysis: any;
@@ -43,6 +45,7 @@ export default function AnalysisDetailClient({
   isOwner,
 }: AnalysisDetailClientProps) {
   const router = useRouter();
+  const [isOneOnOneModalOpen, setIsOneOnOneModalOpen] = useState(false);
 
   const dateRangeStart = new Date(analysis.date_range_start);
   const dateRangeEnd = new Date(analysis.date_range_end);
@@ -575,8 +578,18 @@ export default function AnalysisDetailClient({
               </div>
             </div>
 
-            {/* Export Buttons */}
-            <div className="flex gap-2">
+            {/* Export & Meeting Buttons */}
+            <div className="flex gap-2 flex-wrap items-center">
+              {analysis.personnel?.id && (
+                <Button 
+                  onClick={() => setIsOneOnOneModalOpen(true)} 
+                  size="sm" 
+                  variant="primary"
+                  className="bg-gradient-to-r from-purple-600 to-indigo-700 hover:from-purple-700 hover:to-indigo-800 text-white border-none shadow-md"
+                >
+                  🤝 1-on-1 Görüşme Yap & Taahhüt Al
+                </Button>
+              )}
               <Button onClick={handleExportPDF} size="sm" variant="secondary">
                 📄 PDF İndir
               </Button>
@@ -604,6 +617,19 @@ export default function AnalysisDetailClient({
           <KapsamliDisplay result={analysis.result} />
         )}
       </div>
+
+      {/* 1-on-1 Meeting Modal */}
+      {analysis.personnel && (
+        <OneOnOneMeetingModal
+          isOpen={isOneOnOneModalOpen}
+          onClose={() => setIsOneOnOneModalOpen(false)}
+          personnelId={analysis.personnel.id}
+          personnelName={analysis.personnel.name}
+          onSuccess={() => {
+            alert('🤝 1-on-1 Görüşme ve taahhütler başarıyla kaydedildi!');
+          }}
+        />
+      )}
     </div>
   );
 }

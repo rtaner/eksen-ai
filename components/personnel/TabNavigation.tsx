@@ -8,15 +8,16 @@ interface Tab {
 interface TabNavigationProps {
   activeTab: string;
   onTabChange: (tabId: string) => void;
+  showOneOnOneTab?: boolean;
 }
 
-const tabs: Tab[] = [
-  { id: 'notes', label: 'Notlar' },
-  { id: 'tasks', label: 'Görevler' },
-  { id: 'checklists', label: 'Checklistler' },
-];
-
-export default function TabNavigation({ activeTab, onTabChange }: TabNavigationProps) {
+export default function TabNavigation({ activeTab, onTabChange, showOneOnOneTab = false }: TabNavigationProps) {
+  const tabs: Tab[] = [
+    { id: 'notes', label: 'Notlar' },
+    { id: 'tasks', label: 'Görevler' },
+    { id: 'checklists', label: 'Checklistler' },
+    ...(showOneOnOneTab ? [{ id: 'one-on-one', label: '🤝 1-on-1 Görüşmeler' }] : []),
+  ];
   return (
     <div className="border-b border-gray-200">
       <nav className="flex -mb-px">

@@ -190,6 +190,31 @@ export interface StoreGlossaryItem {
   updated_at: string;
 }
 
+export interface OneOnOneMeeting {
+  id: string;
+  organization_id: string;
+  personnel_id: string;
+  manager_id: string;
+  self_rating: number;
+  answers: {
+    motivation?: string;
+    challenges?: string;
+    team_changes?: string;
+    proudest_accomplishment?: string;
+    manager_support?: string;
+    store_improvements?: string;
+    training_needed?: string;
+    preferred_mentor?: string;
+  };
+  personnel_commitment?: string | null;
+  manager_commitment?: string | null;
+  notes?: string | null;
+  status: 'draft' | 'completed';
+  meeting_date: string;
+  created_at: string;
+  updated_at: string;
+}
+
 // API Response types
 export interface ApiResponse<T> {
   data?: T;

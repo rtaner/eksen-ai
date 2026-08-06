@@ -67,10 +67,11 @@ export default function SocialFeedStream({ personnelList, refreshTrigger, onRefr
       });
       setPersonnelMap(pMap);
 
-      // Query Notes (RLS policy will filter based on role)
+      // Query Notes (Exclude individual personal notes from feed; only store and group notes appear in the feed)
       const { data: notesData } = await supabase
         .from('notes')
         .select('*')
+        .is('personnel_id', null)
         .order('created_at', { ascending: false });
 
       // Query Tasks (Only open/active tasks appear in the Live Social Feed)
