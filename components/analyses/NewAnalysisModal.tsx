@@ -152,7 +152,17 @@ export default function NewAnalysisModal({
         }
       );
 
-      if (fnError) throw fnError;
+      if (fnError) {
+        let detailedError = fnError.message;
+        try {
+          if (fnError.context && typeof fnError.context.json === 'function') {
+            const body = await fnError.context.json();
+            if (body?.error) detailedError = body.error;
+            else if (body?.message) detailedError = body.message;
+          }
+        } catch (_) {}
+        throw new Error(detailedError);
+      }
       if (data && data.success === false) {
         throw new Error(`${data.error}\n\nDetails: ${data.details || ''}`);
       }
